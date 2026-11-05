@@ -64,7 +64,7 @@ Launch waits until all of these pass.
    npm run attack-test
    ```
 
-2. Upload `sandbox-host/.htaccess` and the contents of `game/` to the game folder by FTP. This publishes the placeholder page.
+2. Run the First upload workflow on GitHub. This publishes the placeholder page.
 3. Confirm the isolation is live. Every line must say PASS. If any says FAIL, stop: the game isn't isolated. This also runs after every release.
 
    ```bash

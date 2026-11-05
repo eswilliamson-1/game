@@ -1,0 +1,32 @@
+name: First upload
+# Owner only: publishes the placeholder game, so the game host is ready for launch checks.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node pipeline/deploy.ts --game game v0
+        env:
+          GAME_FTP_HOST: ${{ secrets.GAME_FTP_HOST }}
+          GAME_FTP_USER: ${{ secrets.GAME_FTP_USER }}
+          GAME_FTP_PASSWORD: ${{ secrets.GAME_FTP_PASSWORD }}
+          GAME_FTP_DIR: ${{ vars.GAME_FTP_DIR }}
+      - run: node pipeline/verify-live.ts

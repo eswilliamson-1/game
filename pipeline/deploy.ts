@@ -8,6 +8,8 @@ type Target = { host: string; user: string; password: string; dir: string };
 // Hostinger's FTP certificate names this host, whichever FTP address you connect to.
 const HOSTINGER_CERT_HOST = "ftp.hstgr.io";
 
+const OTHER_SITE_FOLDERS = ["delve", "public_html"];
+
 function target(prefix: "GAME" | "VOTE"): Target {
   const read = (name: string) => {
     const value = process.env[`${prefix}_FTP_${name}`];
@@ -33,6 +35,10 @@ async function withFtp(t: Target, work: (ftp: Client) => Promise<void>) {
       secureOptions: { servername: process.env.FTP_CERT_HOST ?? HOSTINGER_CERT_HOST },
     });
     await ftp.ensureDir(t.dir);
+    // A wrongly scoped account would overwrite the main site, so stop before uploading.
+    const names = (await ftp.list()).map((item) => item.name.toLowerCase());
+    const foreign = names.filter((name) => OTHER_SITE_FOLDERS.includes(name));
+    if (foreign.length) throw new Error(`This FTP account can reach ${foreign.join(", ")}. Limit it to its own folder.`);
     await work(ftp);
   } finally {
     ftp.close();
