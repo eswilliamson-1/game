@@ -52,7 +52,7 @@ The repository, label, and branch protection are already set up at `eswilliamson
 
 1. In Supabase, add two secrets under Vault: `github_repo` (`owner/name`) and `github_dispatch_token` (the token from step 4).
 2. Enable the `pg_cron` and `pg_net` extensions.
-3. Run `supabase/migrations/0002_schedule.sql`, `supabase/migrations/0004_privacy_schedule.sql`, `supabase/migrations/0007_public_record_timer.sql`, `supabase/migrations/0008_one_minute_pace.sql`, `supabase/migrations/0009_idea_board.sql`, `supabase/migrations/0010_build_stage.sql`, and `supabase/migrations/0011_fresh_ai_ideas.sql`, in that order, in the SQL editor.
+3. Run `supabase/migrations/0002_schedule.sql`, `supabase/migrations/0004_privacy_schedule.sql`, `supabase/migrations/0007_public_record_timer.sql`, `supabase/migrations/0008_one_minute_pace.sql`, `supabase/migrations/0009_idea_board.sql`, `supabase/migrations/0010_build_stage.sql`, `supabase/migrations/0011_fresh_ai_ideas.sql`, and `supabase/migrations/0012_idea_sizes.sql`, in that order, in the SQL editor.
 
 ## 7. Check before inviting anyone
 
@@ -82,4 +82,4 @@ Launch waits until all of these pass.
 - **Bug or security fix:** run the Build workflow by hand and describe the fix.
 - **End the launch review period:** run `update settings set launch_review = false;`, and add an entry to `config/rule-changes.json`.
 - **Change the rules:** edit `config/RULES.md`, add an entry to `config/rule-changes.json`, then run `npm run shell:deploy`.
-- **Change the pace:** voting windows follow the number of players active in the last `active_days`. Edit `pace_tiers` in the `settings` table, and `cycle_hours` for groups larger than every tier. `plan_throttle_minutes` sets how quickly new suggestions are picked up. `maxBuildsPerDay` in `config/settings.json` caps daily AI builds.
+- **Change the pace:** voting windows follow the number of players active in the last `active_days`. Edit `pace_tiers` in the `settings` table, and `cycle_hours` for groups larger than every tier. `size_rules` sets the upvotes that medium and major ideas need. `plan_throttle_minutes` sets how quickly new suggestions are picked up. `maxBuildsPerDay` in `config/settings.json` caps daily AI builds.

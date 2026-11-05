@@ -81,6 +81,7 @@ before(async () => {
   await db.exec(readFileSync("supabase/migrations/0009_idea_board.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0010_build_stage.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0011_fresh_ai_ideas.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0012_idea_sizes.sql", "utf8"));
   moved = (await db.query<{ title: string }>(`select title from ideas where not is_no_change`)).rows.map((r) => r.title);
 });
 
@@ -627,4 +628,69 @@ test("new suggestions are noticed quickly, but runs still can't pile up", async 
   assert.equal((await service("select tick() as t")).rows[0].t.plan, false);
   await db.query(`update settings set last_plan_dispatch_at = now() - interval '2 minutes'`);
   assert.equal((await service("select tick() as t")).rows[0].t.plan, true);
+});
+
+const release = () => db.exec(`insert into changes (kind, title) values ('vote', 'The first game')`);
+const sized = async (title: string, size: string) => {
+  const id = await addIdea(title);
+  await db.query(`update ideas set size = $1 where id = $2`, [size, id]);
+  return id;
+};
+const need = async (id: number) => (await as("anon", "", `select need::int from board() where id = $1`, [id])).rows[0].need;
+
+test("bigger ideas need more upvotes, scaled to active players", async () => {
+  await reset();
+  await release();
+  const [s, m, l] = [await sized("S", "small"), await sized("M", "medium"), await sized("L", "major")];
+  assert.deepEqual([await need(s), await need(m), await need(l)], [1, 2, 3]);
+  await db.exec(`insert into auth.users (id) select ('20000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid from generate_series(1, 20) n`);
+  await db.exec(`insert into participation (round, user_id) select 1, id from auth.users where id::text like '20000000-%'`);
+  assert.deepEqual([await need(s), await need(m), await need(l)], [1, 5, 10]);
+  await db.exec(`delete from auth.users where id::text like '20000000-%'`);
+});
+
+test("the first game needs only one upvote, whatever its size", async () => {
+  await reset();
+  assert.equal(await need(await sized("L", "major")), 1);
+});
+
+test("an idea short of its target can't win, keeps its votes, and a smaller idea can win", async () => {
+  await reset();
+  await release();
+  const [big, small] = [await sized("Big", "major"), await sized("Small", "small")];
+  await up(ALICE, big);
+  await up(BOB, big);
+  await up(ALICE, small);
+  const { build } = await endRound();
+  assert.equal((await ballot(build[0])).question, "Small");
+  assert.equal((await idea(big)).status, "open");
+  const { rows } = await as("anon", "", `select votes::int from board() where id = $1`, [big]);
+  assert.equal(rows[0].votes, 2);
+});
+
+test("if no idea reaches its target, nothing changes and the board says so", async () => {
+  await reset();
+  await release();
+  const big = await sized("Big", "major");
+  await up(ALICE, big);
+  assert.deepEqual((await endRound()).build, []);
+  assert.match((await round()).last_round_result, /no idea reached its upvote target/);
+  assert.equal((await idea(big)).status, "open");
+});
+
+test("a major idea wins once it reaches its target", async () => {
+  await reset();
+  await release();
+  const big = await sized("Big", "major");
+  for (const uid of [ALICE, BOB, OWNER]) await up(uid, big);
+  assert.equal((await endRound()).build.length, 1);
+});
+
+test("only the owner can change an idea's size", async () => {
+  await reset();
+  const id = await sized("Idea", "small");
+  await assert.rejects(user(ALICE, `select set_idea_size($1, 'major')`, [id]));
+  await user(OWNER, `select set_idea_size($1, 'major')`, [id]);
+  assert.equal((await idea(id)).size, "major");
+  await assert.rejects(user(OWNER, `select set_idea_size($1, 'huge')`, [id]));
 });

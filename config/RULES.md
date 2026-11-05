@@ -2,9 +2,9 @@
 
 1. **Community-led:** the AI proposes design questions at regular intervals, and players can propose changes.
 2. **Votes drive progress:** if no votes are cast, the game doesn't move forward. One vote is enough.
-3. **Every change gets a vote:** ideas wait on a public board, and players upvote the ones they want. When a round ends, the top idea is built. The board always includes "change nothing this round," and ties go to that option.
+3. **Every change gets a vote:** ideas wait on a public board, and players upvote the ones they want. When a round ends, the top idea that has reached its upvote target is built. The board always includes "change nothing this round," and ties go to that option.
 4. **Automatic builds:** after voting closes, the winning change is built, tested, published, and added to the public patch notes, with credit to whoever suggested it.
-5. **Incremental changes:** each change adds, removes, or alters one thing, and returning players must still recognize the game. Oversized proposals are cut down to a first step.
+5. **Incremental changes:** the game grows one step at a time. Each idea is rated small, medium, or major, and bigger changes need more upvotes, scaled to the number of active players. Oversized proposals are cut down to a first step.
 6. **Destructive changes are allowed:** but from its first release, the game must always stay playable and performant. A release that fails these tests doesn't go live.
 7. **Contained:** the AI and the game can't affect any other part of the website.
 8. **Off-limits content:** no hate speech, sexual content, copyrighted characters or other protected material, or anything illegal.

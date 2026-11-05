@@ -63,6 +63,24 @@ test("logged-out players see the board, but can't vote", async () => {
   await shot(page, "home-desktop");
 });
 
+test("the board shows each idea's size and upvote target", async () => {
+  const { page, errors } = await open("/");
+  await page.waitForSelector("#board");
+  assert.equal(await page.locator("text=Small change").count(), 1);
+  assert.equal(await page.locator("text=Medium change: has its 2 upvotes").count(), 1);
+  assert.equal(await page.locator("text=Major change: 1 of 3 upvotes needed").count(), 1);
+  assert.deepEqual(errors, []);
+});
+
+test("the owner can change an idea's size", async () => {
+  const { page, errors } = await open("/review.html");
+  await logIn(page);
+  await page.waitForSelector("text=Idea sizes");
+  await page.locator("text=Make medium").first().click();
+  await page.waitForSelector("text=A tiny tower climber: Medium change");
+  assert.deepEqual(errors, []);
+});
+
 test("a logged-in player can upvote several ideas and take a vote back", async () => {
   const { page, errors } = await open("/");
   await logIn(page);

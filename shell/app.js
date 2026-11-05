@@ -137,6 +137,14 @@ function accountForm() {
   return form;
 }
 
+const SIZE_NAME = { small: "Small change", medium: "Medium change", major: "Major change" };
+
+function sizeLabel(idea, votes) {
+  const need = Number(idea.need);
+  if (need <= 1) return SIZE_NAME[idea.size];
+  return votes >= need ? `${SIZE_NAME[idea.size]}: has its ${need} upvotes` : `${SIZE_NAME[idea.size]}: ${votes} of ${need} upvotes needed`;
+}
+
 function boardPanel(ideas, round, user, windowMinutes) {
   const top = Math.max(1, ...ideas.map((idea) => Number(idea.votes)));
   const status = el("div");
@@ -164,13 +172,14 @@ function boardPanel(ideas, round, user, windowMinutes) {
       el("span", { class: "label" }, el("span", { textContent: idea.title }), el("span", { textContent: `${idea.mine ? "▲ " : ""}${votes}` })),
       idea.summary ? el("span", { class: "detail", textContent: idea.summary }) : null,
       idea.is_no_change ? null : el("span", { class: "detail", textContent: `Suggested by ${idea.credit}` }),
+      idea.is_no_change ? null : el("span", { class: `size ${votes >= Number(idea.need) ? "ready" : ""}`, textContent: sizeLabel(idea, votes) }),
     );
   });
   return el(
     "section",
     { class: "panel", id: "board" },
     el("h2", { textContent: `Idea board · Round ${round.round_number}` }),
-    el("p", { class: "muted", textContent: "Upvote as many ideas as you like. When the round ends, the top idea gets built, and a tie changes nothing." }),
+    el("p", { class: "muted", textContent: "Upvote as many ideas as you like. When the round ends, the top idea that has reached its upvote target gets built. Bigger changes need more upvotes, and a tie changes nothing." }),
     el("div", { class: "ideas" }, ...buttons),
     closesAt
       ? el("p", { class: "countdown", id: "ballot-time" })
@@ -395,6 +404,7 @@ async function renderReview() {
   if (!(await api.isOwner())) return box.replaceChildren(el("p", { textContent: "Only the site owner can use this page." }));
 
   const { ideas, proposals } = await api.reviewQueue();
+  const onBoard = (await api.board()).filter((idea) => !idea.is_no_change);
   const paused = await api.paused();
   const pauseReason = el("input", { placeholder: "Public reason" });
   const nameToClear = el("input", { placeholder: "Exact name to remove" });
@@ -411,6 +421,22 @@ async function renderReview() {
       ),
     ),
     ideas.length ? "" : el("p", { class: "muted", textContent: "Nothing waiting." }),
+    el("h2", { textContent: "Idea sizes" }),
+    ...onBoard.map((idea) =>
+      el(
+        "section",
+        { class: "panel" },
+        el("p", { textContent: `${idea.title}: ${SIZE_NAME[idea.size]}` }),
+        el(
+          "div",
+          { class: "row" },
+          ...Object.keys(SIZE_NAME).map((size) =>
+            el("button", { class: "secondary", textContent: `Make ${size}`, disabled: idea.size === size, onclick: guarded(() => api.setIdeaSize(idea.id, size)) }),
+          ),
+        ),
+      ),
+    ),
+    onBoard.length ? "" : el("p", { class: "muted", textContent: "No ideas on the board." }),
     el("h2", { textContent: "Proposals on hold" }),
     ...proposals.map((p) =>
       el(

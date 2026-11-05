@@ -34,6 +34,8 @@ main { max-width: 1280px; margin: 0 auto; padding: 16px; }
 .ideas { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: .5rem; margin-top: .25rem; }
 .ideas .option { margin: 0; }
 .ideas .nothing { grid-column: 1 / -1; }
+.option .size { position: relative; display: block; margin-top: .25rem; font-size: .8rem; color: var(--bad); }
+.option .size.ready { color: var(--good); }
 .game { width: 100%; height: min(58vh, 540px); border: 1px solid var(--line); border-radius: 8px; background: #000; display: block; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
 .narrow { max-width: 720px; margin: 0 auto; }

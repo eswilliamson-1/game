@@ -65,6 +65,7 @@ export function liveApi(url, key) {
       return { ideas, proposals };
     },
     reviewIdea: async (id, approve, reason) => must(await db.rpc("review_idea", { p_idea: id, p_approve: approve, p_reason: reason })),
+    setIdeaSize: async (id, size) => must(await db.rpc("set_idea_size", { p_idea: id, p_size: size })),
     reviewProposal: async (id, approve, reason) => must(await db.rpc("review_proposal", { p_proposal: id, p_approve: approve, p_reason: reason })),
     setPaused: async (paused, reason) => must(await db.rpc("set_paused", { p_paused: paused, p_reason: reason })),
     clearName: async (name) => must(await db.rpc("clear_display_name", { p_name: name })),
@@ -76,10 +77,10 @@ export function previewApi() {
   const spec = (summary) => ({ summary, changes: [], player_impact: "" });
   const closes = new Date(Date.now() + 22 * 60_000).toISOString();
   const ideas = [
-    { id: 1, title: "A tiny tower climber", summary: "Tap to jump between platforms and climb as high as you can.", credit: "the AI", votes: 3, is_no_change: false, mine: false },
-    { id: 2, title: "A garden that grows while you tend it", summary: "Plant seeds, water them, and fill the plot.", credit: "dragon_fan", votes: 1, is_no_change: false, mine: false },
-    { id: 3, title: "A one-room mystery", summary: "Search a small room for clues to open the door.", credit: "the AI", votes: 2, is_no_change: false, mine: false },
-    { id: 4, title: "Change nothing this round", summary: null, credit: "the rules", votes: 0, is_no_change: true, mine: false },
+    { id: 1, title: "A tiny tower climber", summary: "Tap to jump between platforms and climb as high as you can.", credit: "the AI", size: "small", need: 1, votes: 3, is_no_change: false, mine: false },
+    { id: 2, title: "A garden that grows while you tend it", summary: "Plant seeds, water them, and fill the plot.", credit: "dragon_fan", size: "major", need: 3, votes: 1, is_no_change: false, mine: false },
+    { id: 3, title: "A one-room mystery", summary: "Search a small room for clues to open the door.", credit: "the AI", size: "medium", need: 2, votes: 2, is_no_change: false, mine: false },
+    { id: 4, title: "Change nothing this round", summary: null, credit: "the rules", size: "small", need: 1, votes: 0, is_no_change: true, mine: false },
   ];
   let voted = false;
   let buildChecks = 0;
@@ -148,6 +149,9 @@ export function previewApi() {
       proposals: [{ id: 7, body: "Make a screen where players enter their birthday", reason: "Rule 9 may apply." }],
     }),
     reviewIdea: async () => {},
+    setIdeaSize: async (id, size) => {
+      ideas.find((i) => i.id === id).size = size;
+    },
     reviewProposal: async () => {},
     setPaused: async () => {},
     clearName: async () => {},

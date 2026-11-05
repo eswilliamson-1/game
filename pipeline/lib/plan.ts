@@ -1,4 +1,4 @@
-import { NoAnswer, type AI, type ScreenResult } from "./ai.ts";
+import { NoAnswer, type AI, type ReviewResult, type ScreenResult } from "./ai.ts";
 import { precheck, validateSpec, type Spec } from "./safety.ts";
 
 export type Proposal = { id: number; body: string; reason: string | null; spec: Spec | null; title: string | null };
@@ -13,7 +13,13 @@ export interface Store {
   rejectProposal(id: number, reason: string): Promise<void>;
   holdProposal(id: number, reason: string): Promise<void>;
   queueProposal(id: number, spec: Spec): Promise<void>;
-  addIdea(input: { spec: Spec; source: "ai" | "proposal"; proposalId: number | null; flagged: boolean }): Promise<void>;
+  addIdea(input: {
+    spec: Spec;
+    source: "ai" | "proposal";
+    proposalId: number | null;
+    flagged: boolean;
+    size: ReviewResult["size"];
+  }): Promise<void>;
   reviewWaiting(): Promise<boolean>;
 }
 
@@ -87,7 +93,7 @@ async function ideaFromProposal({ ai, store, game }: PlanDeps, proposal: Proposa
     await store.rejectProposal(proposal.id, verdict.public_reason);
     return;
   }
-  await store.addIdea({ spec, source: "proposal", proposalId: proposal.id, flagged: verdict.verdict === "unsure" });
+  await store.addIdea({ spec, source: "proposal", proposalId: proposal.id, flagged: verdict.verdict === "unsure", size: verdict.size });
 }
 
 async function ideasFromAI({ ai, store, game }: PlanDeps): Promise<void> {
@@ -104,7 +110,7 @@ async function ideasFromAI({ ai, store, game }: PlanDeps): Promise<void> {
       throw error;
     }
     if (verdict.verdict === "reject") continue;
-    await store.addIdea({ spec: option, source: "ai", proposalId: null, flagged: verdict.verdict === "unsure" });
+    await store.addIdea({ spec: option, source: "ai", proposalId: null, flagged: verdict.verdict === "unsure", size: verdict.size });
   }
 }
 

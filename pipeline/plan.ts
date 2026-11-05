@@ -42,7 +42,7 @@ const store: Store = {
   queueProposal: async (id, spec) => {
     unwrap(await db.from("proposals").update({ status: "queued", title: spec.title, spec, reason: null }).eq("id", id));
   },
-  addIdea: async ({ spec, source, proposalId, flagged }) => {
+  addIdea: async ({ spec, source, proposalId, flagged, size }) => {
     unwrap(
       await db.rpc("add_idea", {
         p_title: spec.title,
@@ -50,6 +50,7 @@ const store: Store = {
         p_source: source,
         p_proposal: proposalId,
         p_flagged: flagged,
+        p_size: size,
       }),
     );
   },

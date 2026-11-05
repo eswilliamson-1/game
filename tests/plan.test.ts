@@ -33,7 +33,7 @@ function fakeStore(pending: Proposal[] = [], fullBoard = false) {
       log.push(`queue ${id}`);
       queued.push({ id, body: "", reason: null, spec, title: spec.title });
     },
-    addIdea: async ({ source, flagged, spec }) => void log.push(`idea ${source} flagged=${flagged} ${spec.title}`),
+    addIdea: async ({ source, flagged, spec, size }) => void log.push(`idea ${source} flagged=${flagged} ${spec.title}${size === "small" ? "" : ` ${size}`}`),
     reviewWaiting: async () => false,
   };
   return { store, log };
@@ -42,7 +42,7 @@ function fakeStore(pending: Proposal[] = [], fullBoard = false) {
 function fakeAI(overrides: Partial<AI> = {}): AI {
   return {
     screen: async () => ({ verdict: "pass", public_reason: "", spec: SPEC }),
-    review: async () => ({ verdict: "pass", public_reason: "" }),
+    review: async () => ({ verdict: "pass", public_reason: "", size: "small" }),
     question: async () => ({ question: "What next?", options: [SPEC] }),
     build: async () => ({ files: [], deleted: [], patch_title: "", patch_notes: "" }),
     compare: async () => ({ matches_spec: true, reason: "" }),
@@ -114,12 +114,18 @@ test("the owner's approval can't override a rejection or a dirty spec", async ()
 
 test("the second reviewer can reject or flag a queued proposal", async () => {
   let { store, log } = fakeStore([proposal(1)], true);
-  await run(fakeAI({ review: async () => ({ verdict: "reject", public_reason: "Sets up a fake login." }) }), store);
+  await run(fakeAI({ review: async () => ({ verdict: "reject", public_reason: "Sets up a fake login.", size: "small" }) }), store);
   assert.deepEqual(log, ["queue 1", "reject 1: Sets up a fake login."]);
 
   ({ store, log } = fakeStore([proposal(1)], true));
-  await run(fakeAI({ review: async () => ({ verdict: "unsure", public_reason: "" }) }), store);
+  await run(fakeAI({ review: async () => ({ verdict: "unsure", public_reason: "", size: "small" }) }), store);
   assert.deepEqual(log, ["queue 1", "idea proposal flagged=true Add a pet dragon"]);
+});
+
+test("the reviewer's size rating reaches the board", async () => {
+  const { store, log } = fakeStore([proposal(1)], true);
+  await run(fakeAI({ review: async () => ({ verdict: "pass", public_reason: "", size: "major" }) }), store);
+  assert.deepEqual(log, ["queue 1", "idea proposal flagged=false Add a pet dragon major"]);
 });
 
 test("when the board runs low, the AI adds ideas", async () => {
@@ -130,7 +136,7 @@ test("when the board runs low, the AI adds ideas", async () => {
 
 test("AI ideas that fail review stay off the board, and the attempt is recorded", async () => {
   const { store, log } = fakeStore();
-  await run(fakeAI({ review: async () => ({ verdict: "reject", public_reason: "No." }) }), store);
+  await run(fakeAI({ review: async () => ({ verdict: "reject", public_reason: "No.", size: "small" }) }), store);
   assert.deepEqual(log, ["asked"]);
 });
 
@@ -147,7 +153,7 @@ const GOOD = [{ path: "game.js", content: "window.gameTest = { inputsHandled: 0,
 
 test("a winning idea is checked against today's game before building", async () => {
   assert.equal(await stillFits(fakeAI(), SPEC, CURRENT), true);
-  assert.equal(await stillFits(fakeAI({ review: async () => ({ verdict: "reject", public_reason: "Out of date." }) }), SPEC, CURRENT), false);
+  assert.equal(await stillFits(fakeAI({ review: async () => ({ verdict: "reject", public_reason: "Out of date.", size: "small" }) }), SPEC, CURRENT), false);
 });
 
 test("a clean build becomes a candidate", async () => {
