@@ -122,15 +122,32 @@ test("every page says when a change is building", async () => {
   assert.equal(await page.locator("#build-status").isVisible(), false);
 });
 
-test("the banner updates by itself when a build finishes, without wiping a draft", async () => {
+test("when a build finishes, the banner updates and the game reloads by itself", async () => {
   const page = await browser.newPage();
   await page.clock.install();
   await page.goto(`${URL}/?building=once`);
   await page.waitForSelector("text=Building now");
-  await page.clock.fastForward(25_000);
+  await page.waitForSelector("iframe.game");
+  await page.evaluate(() => ((window.frames[0] as any).marked = true));
+  await page.clock.fastForward(15_000);
   await page.waitForSelector("#build-status >> text=The build has finished");
-  await page.clock.fastForward(25_000);
+  await page.waitForFunction(() => !(window.frames[0] as any).marked);
+  await page.clock.fastForward(15_000);
   assert.equal(await page.locator("#build-status >> text=The build has finished").count(), 1);
+});
+
+test("the page updates by itself without wiping a draft", async () => {
+  const page = await browser.newPage();
+  await page.clock.install();
+  await page.goto(URL);
+  await logIn(page);
+  await page.fill("#proposal", "A half-typed idea");
+  await page.focus("#proposal");
+  await page.evaluate(() => document.querySelector("#leaderboard")!.setAttribute("data-old", "yes"));
+  await page.clock.fastForward(15_000);
+  await page.waitForFunction(() => !document.querySelector("#leaderboard")!.hasAttribute("data-old"));
+  assert.equal(await page.inputValue("#proposal"), "A half-typed idea");
+  assert.equal(await page.evaluate(() => document.activeElement?.id), "proposal");
 });
 
 test("patch notes show credit and past versions", async () => {

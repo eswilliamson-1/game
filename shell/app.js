@@ -51,7 +51,7 @@ function showFailure(error) {
   notice.textContent = `Something went wrong: ${error.message}`;
 }
 
-const BUILD_CHECK_MS = 20_000;
+const LIVE_UPDATE_MS = 10_000;
 let wasBuilding = false;
 
 async function renderBuildStatus() {
@@ -63,7 +63,9 @@ async function renderBuildStatus() {
     box.textContent = `Building now: ${build.label}. If it passes its tests, it goes live in a few minutes.`;
   } else if (wasBuilding) {
     wasBuilding = false;
-    box.replaceChildren("The build has finished. ", el("a", { href: "patch-notes.html", textContent: "See the result" }), " or ", el("a", { href: location.href, textContent: "reload the game" }), ".");
+    box.replaceChildren("The build has finished. ", el("a", { href: "patch-notes.html", textContent: "See the result" }), ".");
+    const game = document.querySelector("iframe.game");
+    if (game) game.src = game.src;
   } else if (!box.firstElementChild) {
     box.hidden = true;
   }
@@ -142,7 +144,7 @@ function ballotPanel(ballot, user, mine, windowMinutes) {
         onclick: async () => {
           try {
             await api.vote(ballot.id, option.id);
-            refresh();
+            await updateHome();
           } catch (error) {
             showError(status, error);
           }
@@ -278,10 +280,29 @@ async function ballotSection(user) {
   return ballotPanel(ballot, user, mine, windowMinutes);
 }
 
-async function updateBallot() {
-  const panel = $("ballot");
-  if (!panel) return;
-  panel.replaceWith(await ballotSection(await api.user()));
+function recentPanel(proposals) {
+  return el(
+    "section",
+    { class: "panel", id: "recent" },
+    el("h2", { textContent: "Recent suggestions" }),
+    ...proposals.map(proposalRow),
+    proposals.length ? el("a", { href: "suggestions.html", textContent: "See all suggestions" }) : el("p", { class: "muted", textContent: "None yet." }),
+  );
+}
+
+// Swaps single panels, so a suggestion being typed isn't wiped.
+async function updateHome() {
+  const user = await api.user();
+  const [section, proposals, progress, board] = await Promise.all([
+    ballotSection(user),
+    api.proposals(5),
+    user ? api.myProgress() : null,
+    api.leaderboard(),
+  ]);
+  $("ballot").replaceWith(section);
+  $("recent").replaceWith(recentPanel(proposals));
+  $("leaderboard").replaceWith(leaderboardPanel(board));
+  if (progress) $("progress").replaceWith(progressPanel(progress));
   tickCountdown();
 }
 
@@ -301,13 +322,7 @@ async function renderHome() {
     section,
     proposalPanel(user),
     leaderboardPanel(board),
-    el(
-      "section",
-      { class: "panel" },
-      el("h2", { textContent: "Recent suggestions" }),
-      ...proposals.map(proposalRow),
-      proposals.length ? el("a", { href: "suggestions.html", textContent: "See all suggestions" }) : el("p", { class: "muted", textContent: "None yet." }),
-    ),
+    recentPanel(proposals),
   );
 }
 
@@ -475,6 +490,11 @@ if (api.preview) {
 }
 api.onAuthChange(refresh);
 refresh();
-// Only these parts update on their own, so a suggestion being typed isn't wiped.
-setInterval(() => Promise.all([renderBuildStatus(), updateBallot()]).catch(showFailure), BUILD_CHECK_MS);
+// Pages with forms of their own, like Review, are left alone.
+const LIVE_PAGES = { home: updateHome, notes: renderNotes, suggestions: renderSuggestions };
+
+setInterval(() => {
+  if (document.hidden) return;
+  Promise.all([renderBuildStatus(), LIVE_PAGES[document.body.dataset.page]?.()]).catch(showFailure);
+}, LIVE_UPDATE_MS);
 setInterval(tickCountdown, 1000);
