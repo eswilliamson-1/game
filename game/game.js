@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var GOAL = "Sort each shape into its matching bin before it reaches the end. Three mistakes ends the round.";
+  var GOAL = "Sort each shape into its matching bin before it reaches the end. Gold shapes are worth 3 points. Three mistakes ends the round.";
   window.gameTest = { inputsHandled: 0, goal: GOAL };
 
   var canvas = document.getElementById("board");
@@ -25,6 +25,9 @@
     { name: "square", color: "hsl(180, 60%, 45%)", side: 1 }
   ];
 
+  var GOLD = "rgb(255,212,70)";
+  var GOLD_CHANCE = 1 / 15;
+
   var SCALE = 2;
   var W = 300, H = 400;
 
@@ -33,10 +36,11 @@
   var shape = null;
   var spawnDelay = 0;
   var fliers = [];
-  var flash = 0, flashGood = true;
-  var msg = "", msgT = 0;
+  var flash = 0, flashGood = true, flashGold = false;
+  var msg = "", msgT = 0, msgColor = "rgb(120,230,150)", msgGold = false;
   var beltOffset = 0;
   var lastType = -1, sameCount = 0;
+  var glowT = 0;
 
   function resize() {
     var r = stage.getBoundingClientRect();
@@ -73,7 +77,7 @@
       sameCount = 0;
     }
     lastType = t;
-    shape = { type: t, x: W / 2, y: -size() };
+    shape = { type: t, x: W / 2, y: -size(), gold: Math.random() < GOLD_CHANCE };
   }
 
   function startRound() {
@@ -91,19 +95,21 @@
     if (score > best) best = score;
     updateHud();
     overlayTitle.textContent = "Round over";
-    overlayText.textContent = "You sorted " + score + " shapes. Session best: " + best + ".";
+    overlayText.textContent = "You scored " + score + " points. Session best: " + best + ".";
     startBtn.textContent = "Play again";
     overlay.classList.remove("hidden");
   }
 
-  function showMsg(text, good) {
-    msg = text; msgT = 0.7;
-    flash = 0.35; flashGood = good;
+  function showMsg(text, good, gold) {
+    msg = text; msgT = gold ? 0.9 : 0.7;
+    msgGold = !!gold;
+    msgColor = gold ? GOLD : (good ? "rgb(120,230,150)" : "rgb(255,120,120)");
+    flash = 0.35; flashGood = good; flashGold = !!gold;
   }
 
   function mistake(text) {
     miss++;
-    showMsg(text, false);
+    showMsg(text, false, false);
     updateHud();
     if (miss >= 3) endRound();
   }
@@ -120,14 +126,15 @@
     pressVisual(dir);
     if (!shape) return;
     var t = TYPES[shape.type];
+    var gold = !!shape.gold;
     var r = binRect(dir);
-    fliers.push({ type: shape.type, sx: shape.x, sy: shape.y, tx: r.x + r.w / 2, ty: r.y + r.h * 0.45, t: 0, good: t.side === dir, fall: false });
+    fliers.push({ type: shape.type, gold: gold, sx: shape.x, sy: shape.y, tx: r.x + r.w / 2, ty: r.y + r.h * 0.45, t: 0, good: t.side === dir, fall: false });
     shape = null;
     spawnDelay = Math.max(0.08, 0.3 - score * 0.004);
     if (t.side === dir) {
-      score++;
+      score += gold ? 3 : 1;
       if (score > best) best = score;
-      showMsg("+1", true);
+      showMsg(gold ? "+3" : "+1", true, gold);
       updateHud();
     } else {
       mistake("Wrong bin!");
@@ -135,13 +142,14 @@
   }
 
   function update(dt) {
+    glowT += dt;
     if (state === "play") {
       var sp = speed();
       beltOffset = (beltOffset + sp * dt) % 40;
       if (shape) {
         shape.y += sp * dt;
         if (shape.y >= endY()) {
-          fliers.push({ type: shape.type, sx: shape.x, sy: shape.y, tx: shape.x, ty: H + size() * 2, t: 0, good: false, fall: true });
+          fliers.push({ type: shape.type, gold: !!shape.gold, sx: shape.x, sy: shape.y, tx: shape.x, ty: H + size() * 2, t: 0, good: false, fall: true });
           shape = null;
           spawnDelay = 0.4;
           mistake("Missed!");
@@ -159,11 +167,18 @@
     if (msgT > 0) msgT = Math.max(0, msgT - dt);
   }
 
-  function drawShape(type, x, y, s, alpha) {
+  function drawShape(type, x, y, s, alpha, gold) {
     ctx.globalAlpha = alpha;
     ctx.fillStyle = TYPES[type].color;
-    ctx.strokeStyle = "rgba(255,255,255,0.85)";
-    ctx.lineWidth = 3;
+    if (gold) {
+      ctx.strokeStyle = GOLD;
+      ctx.lineWidth = 5;
+      ctx.shadowColor = "rgba(255,205,60,0.9)";
+      ctx.shadowBlur = s * (0.7 + 0.3 * Math.sin(glowT * 6));
+    } else {
+      ctx.strokeStyle = "rgba(255,255,255,0.85)";
+      ctx.lineWidth = 3;
+    }
     ctx.beginPath();
     if (TYPES[type].name === "circle") {
       ctx.arc(x, y, s, 0, Math.PI * 2);
@@ -172,6 +187,10 @@
     }
     ctx.fill();
     ctx.stroke();
+    if (gold) {
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = "rgba(0,0,0,0)";
+    }
     ctx.globalAlpha = 1;
   }
 
@@ -185,7 +204,7 @@
     ctx.rect(r.x, r.y, r.w, r.h);
     ctx.fill();
     ctx.stroke();
-    drawShape(type, r.x + r.w * 0.22, r.y + r.h * 0.5, Math.min(r.h, r.w) * 0.16, 0.9);
+    drawShape(type, r.x + r.w * 0.22, r.y + r.h * 0.5, Math.min(r.h, r.w) * 0.16, 0.9, false);
     ctx.fillStyle = "rgb(233,230,223)";
     ctx.font = "bold " + Math.round(Math.min(r.h * 0.22, r.w * 0.13)) + "px system-ui, sans-serif";
     ctx.textAlign = "left";
@@ -198,7 +217,8 @@
     ctx.fillRect(0, 0, W, H);
 
     if (flash > 0) {
-      ctx.fillStyle = flashGood ? "rgba(80,200,120," + (flash * 0.5) + ")" : "rgba(230,70,70," + (flash * 0.8) + ")";
+      if (flashGold) ctx.fillStyle = "rgba(255,200,60," + (flash * 0.5) + ")";
+      else ctx.fillStyle = flashGood ? "rgba(80,200,120," + (flash * 0.5) + ")" : "rgba(230,70,70," + (flash * 0.8) + ")";
       ctx.fillRect(0, 0, W, H);
     }
 
@@ -239,23 +259,32 @@
     drawBin(-1);
     drawBin(1);
 
-    if (shape) drawShape(shape.type, shape.x, shape.y, size(), 1);
+    if (shape) drawShape(shape.type, shape.x, shape.y, size(), 1, shape.gold);
 
     for (var i = 0; i < fliers.length; i++) {
       var f = fliers[i];
       var p = f.t;
       var x = f.sx + (f.tx - f.sx) * p;
       var yy = f.sy + (f.ty - f.sy) * p - (f.fall ? 0 : Math.sin(p * Math.PI) * H * 0.08);
-      drawShape(f.type, x, yy, size() * (1 - p * 0.45), 1 - p * 0.5);
+      drawShape(f.type, x, yy, size() * (1 - p * 0.45), 1 - p * 0.5, f.gold);
     }
 
     if (msgT > 0) {
       ctx.globalAlpha = Math.min(1, msgT * 2);
-      ctx.fillStyle = msg === "+1" ? "rgb(120,230,150)" : "rgb(255,120,120)";
-      ctx.font = "bold " + Math.round(Math.min(W, H) * 0.08) + "px system-ui, sans-serif";
+      ctx.fillStyle = msgColor;
+      var fs = Math.min(W, H) * (msgGold ? 0.11 : 0.08);
+      ctx.font = "bold " + Math.round(fs) + "px system-ui, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
+      if (msgGold) {
+        ctx.shadowColor = "rgba(255,205,60,0.9)";
+        ctx.shadowBlur = fs * 0.5;
+      }
       ctx.fillText(msg, W / 2, H * 0.12);
+      if (msgGold) {
+        ctx.shadowBlur = 0;
+        ctx.shadowColor = "rgba(0,0,0,0)";
+      }
       ctx.globalAlpha = 1;
     }
   }
