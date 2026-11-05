@@ -157,7 +157,7 @@ function boardPanel(ideas, round, user, windowMinutes) {
       "button",
       {
         class: idea.is_no_change ? "option nothing" : "option",
-        disabled: !user,
+        disabled: !user || idea.building,
         "aria-pressed": String(idea.mine),
         onclick: async () => {
           try {
@@ -172,7 +172,7 @@ function boardPanel(ideas, round, user, windowMinutes) {
       el("span", { class: "label" }, el("span", { textContent: idea.title }), el("span", { textContent: `${idea.mine ? "▲ " : ""}${votes}` })),
       idea.summary ? el("span", { class: "detail", textContent: idea.summary }) : null,
       idea.is_no_change ? null : el("span", { class: "detail", textContent: `Suggested by ${idea.credit}` }),
-      idea.is_no_change ? null : el("span", { class: `size ${votes >= Number(idea.need) ? "ready" : ""}`, textContent: sizeLabel(idea, votes) }),
+      idea.is_no_change ? null : el("span", { class: `size ${idea.building || votes >= Number(idea.need) ? "ready" : ""}`, textContent: idea.building ? "Won, and being built now" : sizeLabel(idea, votes) }),
     );
   });
   return el(

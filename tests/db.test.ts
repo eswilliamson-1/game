@@ -700,3 +700,15 @@ test("functions the site and pipeline call name the settings row in every update
   const latest = readFileSync("supabase/migrations/0013_safe_updates.sql", "utf8");
   assert.equal(latest.match(/update settings set [^;]*;/g)?.every((sql) => sql.includes(" where ")), true);
 });
+
+test("the winner stays on the board until the build ends, and can't be voted on", async () => {
+  await reset();
+  const id = await addIdea("Winner");
+  await up(ALICE, id);
+  const { build } = await endRound();
+  const shown = async () => (await as("anon", "", `select title, building from board() where id = $1`, [id])).rows;
+  assert.deepEqual(await shown(), [{ title: "Winner", building: true }]);
+  await assert.rejects(up(BOB, id));
+  await service(`select complete_build($1, true, 'v1', 'Winner', 'Done')`, [build[0]]);
+  assert.deepEqual(await shown(), []);
+});

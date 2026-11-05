@@ -146,6 +146,13 @@ test("during a build, the board says the round waits for it", async () => {
   assert.deepEqual(errors, []);
 });
 
+test("the winning idea stays on the board while it builds", async () => {
+  const { page, errors } = await open("/?building");
+  await page.waitForSelector("#board >> text=Won, and being built now");
+  assert.equal(await page.locator(".option").first().isDisabled(), true);
+  assert.deepEqual(errors, []);
+});
+
 test("the banner names the build stage", async () => {
   for (const [stage, words] of [["writing", "Step 1 of 3"], ["testing", "Step 2 of 3"], ["fixing", "trying to fix it"], ["publishing", "Step 3 of 3"]]) {
     const { page, errors } = await open(`/?building=${stage}`);

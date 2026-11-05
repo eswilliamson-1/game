@@ -107,7 +107,11 @@ export function previewApi() {
     onAuthChange: () => {},
     isOwner: async () => signedIn,
     paused: async () => false,
-    board: async () => [...ideas].sort((a, b) => a.is_no_change - b.is_no_change || b.votes - a.votes),
+    async board() {
+      const sorted = [...ideas].sort((a, b) => a.is_no_change - b.is_no_change || b.votes - a.votes);
+      if (!new URLSearchParams(location.search).has("building")) return sorted;
+      return [{ id: 5, title: "A pet follows you", summary: "A small companion trails the player.", credit: "the AI", size: "small", need: 1, votes: 2, is_no_change: false, mine: false, building: true }, ...sorted];
+    },
     round: async () => ({ round_number: 4, round_closes_at: closes, last_round_result: 'Round 3: "A pet follows you" won.' }),
     windowMinutes: async () => 1,
     // Add ?building=testing to the address to preview a stage, or ?building=once to see it finish.
