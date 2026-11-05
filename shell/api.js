@@ -44,6 +44,10 @@ export function liveApi(url, key) {
       const results = must(await db.rpc("ballot_results", { p_ballot: ballot.id }));
       return { ...ballot, options, results };
     },
+    async windowMinutes() {
+      const [hours, minutes] = must(await db.rpc("cycle_interval")).split(":").map(Number);
+      return hours * 60 + minutes;
+    },
     async building() {
       const ballot = must(await db.from("ballots").select("winner_option_id").eq("status", "building").maybeSingle());
       if (!ballot) return null;
@@ -125,6 +129,7 @@ export function previewApi() {
     isOwner: async () => signedIn,
     paused: async () => false,
     currentBallot: async () => ballot,
+    windowMinutes: async () => 1,
     // Add ?building to the address to preview the banner, or ?building=once to see it finish.
     async building() {
       const value = new URLSearchParams(location.search).get("building");

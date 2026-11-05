@@ -18,12 +18,27 @@ function el(tag, props = {}, ...children) {
 
 const $ = (id) => document.getElementById(id);
 
-function timeLeft(iso) {
-  const ms = new Date(iso) - Date.now();
-  if (ms <= 0) return "closing soon";
-  const minutes = Math.ceil(ms / 60_000);
-  if (minutes < 60) return `${minutes} min left`;
-  return `${Math.floor(minutes / 60)} h ${minutes % 60} min left`;
+const pad = (n) => String(n).padStart(2, "0");
+
+function clock(seconds) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return `${hours ? `${hours}:${pad(minutes)}` : minutes}:${pad(seconds % 60)}`;
+}
+
+function windowLabel(minutes) {
+  if (minutes < 60) return minutes === 1 ? "1 minute" : `${minutes} minutes`;
+  const hours = minutes / 60;
+  return hours === 1 ? "1 hour" : `${hours} hours`;
+}
+
+let closesAt = null;
+
+function tickCountdown() {
+  const box = $("ballot-time");
+  if (!box || !closesAt) return;
+  const seconds = Math.ceil((new Date(closesAt) - Date.now()) / 1000);
+  box.textContent = seconds > 0 ? `Voting closes in ${clock(seconds)}` : "Voting is closing now. The result appears within about a minute.";
 }
 
 function showError(target, error) {
@@ -109,7 +124,7 @@ function accountForm() {
   return form;
 }
 
-function ballotPanel(ballot, user, mine) {
+function ballotPanel(ballot, user, mine, windowMinutes) {
   const total = ballot.results.reduce((n, r) => n + Number(r.votes), 0);
   const canVote = user && ballot.status === "open";
   const status = el("div");
@@ -138,19 +153,20 @@ function ballotPanel(ballot, user, mine) {
       option.spec?.summary ? el("span", { class: "detail", textContent: option.spec.summary }) : null,
     );
   });
+  closesAt = ballot.status === "open" && total > 0 ? ballot.closes_at : null;
   const state =
     ballot.status === "building"
-      ? "Voting has closed. The winning change is being built."
-      : total === 0
-        ? "No votes yet. The game won't change until someone votes."
-        : timeLeft(ballot.closes_at);
+      ? el("p", { class: "muted", textContent: "Voting has closed. The winning change is being built." })
+      : closesAt
+        ? el("p", { class: "countdown", id: "ballot-time" })
+        : el("p", { class: "muted", textContent: `No votes yet, so the clock hasn't started. Once someone votes, voting closes within ${windowLabel(windowMinutes)}.` });
   return el(
     "section",
     { class: "panel", id: "ballot" },
     el("h2", { textContent: ballot.question }),
     el("p", { class: "credit", textContent: `Suggested by ${ballot.credit}` }),
     ...options,
-    el("p", { class: "muted", textContent: state }),
+    state,
     status,
   );
 }
@@ -252,23 +268,37 @@ function proposalRow(p) {
   );
 }
 
+async function ballotSection(user) {
+  const [ballot, windowMinutes] = await Promise.all([api.currentBallot(), api.windowMinutes()]);
+  if (!ballot) {
+    closesAt = null;
+    return el("section", { class: "panel", id: "ballot" }, el("h2", { textContent: "Current vote" }), el("p", { class: "muted", textContent: "The next vote will appear here soon." }));
+  }
+  const mine = user ? await api.myVote(ballot.id, user.id) : null;
+  return ballotPanel(ballot, user, mine, windowMinutes);
+}
+
+async function updateBallot() {
+  const panel = $("ballot");
+  if (!panel) return;
+  panel.replaceWith(await ballotSection(await api.user()));
+  tickCountdown();
+}
+
 async function renderHome() {
   const user = await api.user();
-  const [ballot, proposals, paused, progress, board] = await Promise.all([
-    api.currentBallot(),
+  const [section, proposals, paused, progress, board] = await Promise.all([
+    ballotSection(user),
     api.proposals(5),
     api.paused(),
     user ? api.myProgress() : null,
     api.leaderboard(),
   ]);
-  const mine = ballot && user ? await api.myVote(ballot.id, user.id) : null;
   const side = $("side");
   side.replaceChildren(
     user ? progressPanel(progress) : el("section", { class: "panel" }, accountForm()),
     paused ? el("section", { class: "panel" }, el("p", { textContent: "The game is paused by the owner." })) : "",
-    ballot
-      ? ballotPanel(ballot, user, mine)
-      : el("section", { class: "panel" }, el("h2", { textContent: "Current vote" }), el("p", { class: "muted", textContent: "The next vote will appear here soon." })),
+    section,
     proposalPanel(user),
     leaderboardPanel(board),
     el(
@@ -431,6 +461,7 @@ async function refresh() {
     await renderAccount(await api.user());
     await renderBuildStatus();
     await PAGES[document.body.dataset.page]?.();
+    tickCountdown();
     if (!api.preview) $("notice").hidden = true;
   } catch (error) {
     showFailure(error);
@@ -444,5 +475,6 @@ if (api.preview) {
 }
 api.onAuthChange(refresh);
 refresh();
-// Only the banner updates on its own, so a suggestion being typed isn't wiped.
-setInterval(() => renderBuildStatus().catch(showFailure), BUILD_CHECK_MS);
+// Only these parts update on their own, so a suggestion being typed isn't wiped.
+setInterval(() => Promise.all([renderBuildStatus(), updateBallot()]).catch(showFailure), BUILD_CHECK_MS);
+setInterval(tickCountdown, 1000);

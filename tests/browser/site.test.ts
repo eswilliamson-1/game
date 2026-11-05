@@ -97,6 +97,20 @@ test("the suggestions page lists every suggestion with its status", async () => 
   await shot(page, "suggestions");
 });
 
+test("the ballot shows a live countdown", async () => {
+  const page = await browser.newPage();
+  await page.clock.install();
+  await page.goto(URL);
+  await page.waitForSelector("#ballot-time");
+  const read = () => page.locator("#ballot-time").innerText();
+  assert.match(await read(), /^Voting closes in 2[12]:\d\d$/);
+  const before = await read();
+  await page.clock.fastForward(5_000);
+  assert.notEqual(await read(), before);
+  await page.clock.fastForward(23 * 60_000);
+  assert.match(await read(), /closing now/);
+});
+
 test("every page says when a change is building", async () => {
   for (const path of ["/?building", "/suggestions.html?building", "/rules.html?building"]) {
     const { page, errors } = await open(path);

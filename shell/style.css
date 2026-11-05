@@ -37,6 +37,8 @@ main { max-width: 1120px; margin: 0 auto; padding: 16px; }
 .error { color: var(--bad); font-size: .9rem; }
 .success { color: var(--good); font-size: .9rem; }
 
+.countdown { margin-top: .75rem; font-weight: 600; color: var(--accent); }
+
 .option { display: block; width: 100%; text-align: left; margin: .5rem 0 0; padding: .65rem .75rem; background: transparent; color: var(--text); border: 1px solid var(--line); border-radius: 6px; font: inherit; cursor: pointer; position: relative; overflow: hidden; }
 .option:hover:not(:disabled) { border-color: var(--accent); }
 .option:disabled { cursor: default; opacity: 1; }
