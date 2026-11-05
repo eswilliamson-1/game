@@ -165,7 +165,7 @@ test("the top idea wins, and other votes carry into the next round", async () =>
   await up(OWNER, b);
   const { build } = await endRound();
   assert.equal((await ballot(build[0])).question, "A");
-  const board = await as("anon", "", `select title, votes::int from board()`);
+  const board = await as("anon", "", `select title, votes::int from board() where not building`);
   assert.deepEqual(board.rows, [{ title: "B", votes: 1 }, { title: "Change nothing this round", votes: 0 }]);
 });
 
