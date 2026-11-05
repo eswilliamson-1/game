@@ -148,7 +148,7 @@ function boardPanel(ideas, round, user, windowMinutes) {
     return el(
       "button",
       {
-        class: "option",
+        class: idea.is_no_change ? "option nothing" : "option",
         disabled: !user,
         "aria-pressed": String(idea.mine),
         onclick: async () => {
@@ -171,7 +171,7 @@ function boardPanel(ideas, round, user, windowMinutes) {
     { class: "panel", id: "board" },
     el("h2", { textContent: `Idea board · Round ${round.round_number}` }),
     el("p", { class: "muted", textContent: "Upvote as many ideas as you like. When the round ends, the top idea gets built, and a tie changes nothing." }),
-    ...buttons,
+    el("div", { class: "ideas" }, ...buttons),
     closesAt
       ? el("p", { class: "countdown", id: "ballot-time" })
       : el("p", { class: "muted", textContent: `No votes this round, so the clock hasn't started. Once someone votes, the round ends within ${windowLabel(windowMinutes)}.` }),
@@ -317,11 +317,11 @@ async function renderHome() {
     user ? api.myProgress() : null,
     api.leaderboard(),
   ]);
+  $("board-slot").replaceChildren(section);
   const side = $("side");
   side.replaceChildren(
     user ? progressPanel(progress) : el("section", { class: "panel" }, accountForm()),
     paused ? el("section", { class: "panel" }, el("p", { textContent: "The game is paused by the owner." })) : "",
-    section,
     proposalPanel(user),
     leaderboardPanel(board),
     recentPanel(proposals),
