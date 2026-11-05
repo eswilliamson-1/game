@@ -81,5 +81,6 @@ Launch waits until all of these pass.
 - **Roll back:** run the Rollback workflow on GitHub.
 - **Bug or security fix:** run the Build workflow by hand and describe the fix.
 - **End the launch review period:** run `update settings set launch_review = false;`, and add an entry to `config/rule-changes.json`.
+- **Update the database:** add a file to `supabase/migrations`, push it, then run the Database workflow on GitHub. It applies only new files.
 - **Change the rules:** edit `config/RULES.md`, add an entry to `config/rule-changes.json`, then run `npm run shell:deploy`.
 - **Change the pace:** voting windows follow the number of players active in the last `active_days`. Edit `pace_tiers` in the `settings` table, and `cycle_hours` for groups larger than every tier. `size_rules` sets the upvotes that medium and major ideas need. `plan_throttle_minutes` sets how quickly new suggestions are picked up. `maxBuildsPerDay` in `config/settings.json` caps daily AI builds.

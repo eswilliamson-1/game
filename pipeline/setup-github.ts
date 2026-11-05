@@ -11,6 +11,7 @@ const GH = existsSync(WINDOWS_GH) ? WINDOWS_GH : "gh";
 const SECRETS = [
   ["ANTHROPIC_API_KEY", "Claude API key"],
   ["SUPABASE_SERVICE_KEY", "Supabase service role key"],
+  ["SUPABASE_DB_URL", "Supabase session pooler connection string, with your database password filled in"],
   ["GAME_FTP_HOST", "Game FTP host"],
   ["GAME_FTP_USER", "Game FTP username"],
   ["GAME_FTP_PASSWORD", "Game FTP password"],
