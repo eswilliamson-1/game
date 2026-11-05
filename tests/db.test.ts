@@ -86,6 +86,7 @@ before(async () => {
   await db.exec(readFileSync("supabase/migrations/0014_timer_and_spending.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0015_medium_needs_one.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0016_major_scales_down.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0017_active_means_three_days.sql", "utf8"));
   moved = (await db.query<{ title: string }>(`select title from ideas where not is_no_change`)).rows.map((r) => r.title);
 });
 
