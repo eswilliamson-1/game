@@ -79,6 +79,7 @@ before(async () => {
   await db.query(`insert into owners values ($1)`, [OWNER]);
   await db.query(`select create_ballot('Old question', 'ai', null, '[{"label":"Old idea"}]', false)`);
   await db.exec(readFileSync("supabase/migrations/0009_idea_board.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0010_build_stage.sql", "utf8"));
   moved = (await db.query<{ title: string }>(`select title from ideas where not is_no_change`)).rows.map((r) => r.title);
 });
 
@@ -117,6 +118,17 @@ test("one upvote starts the clock and is enough to win", async () => {
   const s = await round();
   assert.equal(s.round_number, 2);
   assert.equal(s.round_closes_at, null);
+});
+
+test("a build starts at the writing stage, and anyone can see how far along it is", async () => {
+  await reset();
+  await up(ALICE, await addIdea());
+  const { build } = await endRound();
+  const read = () => as("anon", "", `select build_stage from ballots where id = $1`, [build[0]]);
+  assert.equal((await read()).rows[0].build_stage, "writing");
+  await service(`update ballots set build_stage = 'testing' where id = $1`, [build[0]]);
+  assert.equal((await read()).rows[0].build_stage, "testing");
+  await assert.rejects(service(`update ballots set build_stage = 'anything' where id = $1`, [build[0]]));
 });
 
 test("the top idea wins, and other votes carry into the next round", async () => {

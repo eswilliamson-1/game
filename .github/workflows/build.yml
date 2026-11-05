@@ -46,6 +46,26 @@ jobs:
           path: .candidate
           include-hidden-files: true
 
+  # Tells the site how far along the build is. Runs no generated code, and a
+  # failure here never affects the release.
+  stage-testing:
+    needs: build
+    if: github.event.client_payload.ballot_id != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    continue-on-error: true
+    permissions: {}
+    steps:
+      - run: >
+          curl -sf -X PATCH "$SUPABASE_URL/rest/v1/ballots?id=eq.$BALLOT_ID"
+          -H "apikey: $SUPABASE_SERVICE_KEY"
+          -H "Authorization: Bearer $SUPABASE_SERVICE_KEY"
+          -H "Content-Type: application/json"
+          -d '{"build_stage":"testing"}'
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
   check:
     needs: build
     runs-on: ubuntu-latest
@@ -75,6 +95,26 @@ jobs:
         with:
           name: failure-1
           path: failure.txt
+
+  # Tells the site how far along the build is. Runs no generated code, and a
+  # failure here never affects the release.
+  stage-fixing:
+    needs: check
+    if: needs.check.outputs.passed != 'true' && github.event.client_payload.ballot_id != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    continue-on-error: true
+    permissions: {}
+    steps:
+      - run: >
+          curl -sf -X PATCH "$SUPABASE_URL/rest/v1/ballots?id=eq.$BALLOT_ID"
+          -H "apikey: $SUPABASE_SERVICE_KEY"
+          -H "Authorization: Bearer $SUPABASE_SERVICE_KEY"
+          -H "Content-Type: application/json"
+          -d '{"build_stage":"fixing"}'
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
   repair:
     needs: check
@@ -131,6 +171,26 @@ jobs:
           path: .candidate
       - id: check
         run: node pipeline/check.ts
+
+  # Tells the site how far along the build is. Runs no generated code, and a
+  # failure here never affects the release.
+  stage-publishing:
+    needs: [check, recheck]
+    if: always() && (needs.check.outputs.passed == 'true' || needs.recheck.outputs.passed == 'true') && github.event.client_payload.ballot_id != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    continue-on-error: true
+    permissions: {}
+    steps:
+      - run: >
+          curl -sf -X PATCH "$SUPABASE_URL/rest/v1/ballots?id=eq.$BALLOT_ID"
+          -H "apikey: $SUPABASE_SERVICE_KEY"
+          -H "Authorization: Bearer $SUPABASE_SERVICE_KEY"
+          -H "Content-Type: application/json"
+          -d '{"build_stage":"publishing"}'
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
   deploy:
     needs: [check, recheck]

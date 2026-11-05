@@ -121,6 +121,14 @@ test("every page says when a change is building", async () => {
   assert.equal(await page.locator("#build-status").isVisible(), false);
 });
 
+test("the banner names the build stage", async () => {
+  for (const [stage, words] of [["writing", "Step 1 of 3"], ["testing", "Step 2 of 3"], ["fixing", "trying to fix it"], ["publishing", "Step 3 of 3"]]) {
+    const { page, errors } = await open(`/?building=${stage}`);
+    await page.waitForSelector(`#build-status >> text=${words}`);
+    assert.deepEqual(errors, []);
+  }
+});
+
 test("when a build finishes, the banner updates and the game reloads by itself", async () => {
   const page = await browser.newPage();
   await page.clock.install();

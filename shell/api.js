@@ -42,9 +42,10 @@ export function liveApi(url, key) {
       return hours * 60 + minutes;
     },
     async building() {
-      const ballot = must(await db.from("ballots").select("winner_option_id").eq("status", "building").maybeSingle());
+      const ballot = must(await db.from("ballots").select("winner_option_id, build_stage").eq("status", "building").maybeSingle());
       if (!ballot) return null;
-      return must(await db.from("options").select("label").eq("id", ballot.winner_option_id).single());
+      const { label } = must(await db.from("options").select("label").eq("id", ballot.winner_option_id).single());
+      return { label, stage: ballot.build_stage };
     },
     upvote: async (idea) => must(await db.rpc("toggle_upvote", { p_idea: idea })),
     propose: async (body) => must(await db.rpc("submit_proposal", { p_body: body })),
@@ -108,11 +109,11 @@ export function previewApi() {
     board: async () => [...ideas].sort((a, b) => a.is_no_change - b.is_no_change || b.votes - a.votes),
     round: async () => ({ round_number: 4, round_closes_at: closes, last_round_result: 'Round 3: "A pet follows you" won.' }),
     windowMinutes: async () => 1,
-    // Add ?building to the address to preview the banner, or ?building=once to see it finish.
+    // Add ?building=testing to the address to preview a stage, or ?building=once to see it finish.
     async building() {
       const value = new URLSearchParams(location.search).get("building");
       if (value === null || buildChecks++ > 0 && value === "once") return null;
-      return { label: "A tiny tower climber" };
+      return { label: "A tiny tower climber", stage: value === "once" || value === "" ? "writing" : value };
     },
     upvote: async (id) => {
       const idea = ideas.find((i) => i.id === id);

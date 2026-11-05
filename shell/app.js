@@ -52,6 +52,12 @@ function showFailure(error) {
 }
 
 const LIVE_UPDATE_MS = 10_000;
+const BUILD_STAGE = {
+  writing: "Step 1 of 3: the AI is writing the change.",
+  testing: "Step 2 of 3: playing it to check it works and runs smoothly.",
+  fixing: "Step 2 of 3: testing found a problem, so the AI is trying to fix it.",
+  publishing: "Step 3 of 3: publishing it to the site.",
+};
 let wasBuilding = false;
 
 async function renderBuildStatus() {
@@ -60,7 +66,7 @@ async function renderBuildStatus() {
   if (build) {
     wasBuilding = true;
     box.hidden = false;
-    box.textContent = `Building now: ${build.label}. If it passes its tests, it goes live in a few minutes.`;
+    box.textContent = `Building now: ${build.label}. ${BUILD_STAGE[build.stage]}`;
   } else if (wasBuilding) {
     wasBuilding = false;
     box.replaceChildren("The build has finished. ", el("a", { href: "patch-notes.html", textContent: "See the result" }), ".");
