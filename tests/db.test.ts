@@ -82,6 +82,7 @@ before(async () => {
   await db.exec(readFileSync("supabase/migrations/0010_build_stage.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0011_fresh_ai_ideas.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0012_idea_sizes.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0013_safe_updates.sql", "utf8"));
   moved = (await db.query<{ title: string }>(`select title from ideas where not is_no_change`)).rows.map((r) => r.title);
 });
 
@@ -693,4 +694,9 @@ test("only the owner can change an idea's size", async () => {
   await user(OWNER, `select set_idea_size($1, 'major')`, [id]);
   assert.equal((await idea(id)).size, "major");
   await assert.rejects(user(OWNER, `select set_idea_size($1, 'huge')`, [id]));
+});
+
+test("functions the site and pipeline call name the settings row in every update", () => {
+  const latest = readFileSync("supabase/migrations/0013_safe_updates.sql", "utf8");
+  assert.equal(latest.match(/update settings set [^;]*;/g)?.every((sql) => sql.includes(" where ")), true);
 });
