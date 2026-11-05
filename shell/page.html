@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{title}} · {{siteName}}</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-page="{{page}}">
+  <header class="top">
+    <a class="brand" href="index.html">{{siteName}}</a>
+    <nav>
+      <a href="index.html">Play &amp; vote</a>
+      <a href="patch-notes.html">Patch notes</a>
+      <a href="rules.html">Rules</a>
+      <a href="privacy.html">Privacy</a>
+    </nav>
+    <div id="account" class="account"></div>
+  </header>
+  <div id="notice" class="notice" hidden></div>
+  <main>{{content}}</main>
+  <script src="app.js" type="module"></script>
+</body>
+</html>

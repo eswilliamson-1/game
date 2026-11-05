@@ -1,0 +1,60 @@
+name: Rollback
+# Owner only: running a workflow by hand needs write access to the repo.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to restore, such as v3
+        required: true
+      reason:
+        description: Public reason
+        required: true
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Restore the game folder
+        run: |
+          [[ "$VERSION" =~ ^v[0-9]+$ ]] || { echo "Bad version"; exit 1; }
+          rm -rf game
+          git checkout "refs/tags/$VERSION" -- game
+          git config user.name "community-game-bot"
+          git config user.email "community-game-bot@users.noreply.github.com"
+          git add game
+          git commit -m "Roll back to $VERSION" --allow-empty
+      - name: Confirm the release only changes the game
+        run: bash pipeline/verify-release.sh
+      - run: git push origin HEAD
+      - run: node pipeline/deploy.ts --game game "$VERSION"
+        env:
+          GAME_FTP_HOST: ${{ secrets.GAME_FTP_HOST }}
+          GAME_FTP_USER: ${{ secrets.GAME_FTP_USER }}
+          GAME_FTP_PASSWORD: ${{ secrets.GAME_FTP_PASSWORD }}
+          GAME_FTP_DIR: ${{ vars.GAME_FTP_DIR }}
+      - run: node pipeline/report.ts
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          RELEASED: "false"
+          ROLLBACK_TO: ${{ inputs.version }}
+          ROLLBACK_REASON: ${{ inputs.reason }}

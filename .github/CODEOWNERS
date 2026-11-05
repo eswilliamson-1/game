@@ -1,0 +1,4 @@
+# Every pull request needs your review. The game folder is left out because
+# only the release bot changes it, and it does so without a pull request.
+*       @eswilliamson-1
+/game/

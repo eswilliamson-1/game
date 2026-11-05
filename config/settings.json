@@ -1,0 +1,25 @@
+{
+  "siteName": "Community Game",
+  "hosts": {
+    "vote": "vote.ewpages.com",
+    "game": "sandbox.ewpages.com"
+  },
+  "mustBeBlocked": ["https://ewpages.com/sandbox/", "https://ewpages.com/vote/"],
+  "privacy": { "owner": "", "contact": "eswxbox@gmail.com", "dataRegion": "the United States", "updated": "2026-11-04" },
+  "model": "claude-opus-5-5",
+  "proposal": { "maxChars": 280 },
+  "build": {
+    "maxBuildsPerDay": 12,
+    "maxFiles": 30,
+    "allowedExtensions": [".html", ".js", ".css", ".svg", ".json"]
+  },
+  "performance": {
+    "maxLoadMs": 3000,
+    "minFpsPhone": 30,
+    "minFpsLaptop": 60,
+    "maxInputMs": 100,
+    "maxDownloadBytes": 5242880,
+    "playSessionSeconds": 300,
+    "maxHeapGrowthRatio": 1.5
+  }
+}

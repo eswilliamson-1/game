@@ -1,0 +1,239 @@
+name: Build
+# Each job holds only the secret it needs. The check jobs, the only ones that
+# run generated code, hold none.
+on:
+  repository_dispatch:
+    types: [build]
+  workflow_dispatch:
+    inputs:
+      fix_description:
+        description: Bug or security fix to make, with no vote
+        required: true
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions: {}
+
+env:
+  BALLOT_ID: ${{ github.event.client_payload.ballot_id }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node pipeline/build.ts
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+          FIX_DESCRIPTION: ${{ inputs.fix_description }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: candidate-1
+          path: .candidate
+          include-hidden-files: true
+
+  check:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      passed: ${{ steps.check.outputs.passed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - uses: actions/download-artifact@v4
+        with:
+          name: candidate-1
+          path: .candidate
+      - id: check
+        run: node pipeline/check.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: failure-1
+          path: failure.txt
+
+  repair:
+    needs: check
+    if: needs.check.outputs.passed != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: failure-1
+      - run: node pipeline/build.ts
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+          FIX_DESCRIPTION: ${{ inputs.fix_description }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: candidate-2
+          path: .candidate
+          include-hidden-files: true
+
+  recheck:
+    needs: repair
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      passed: ${{ steps.check.outputs.passed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - uses: actions/download-artifact@v4
+        with:
+          name: candidate-2
+          path: .candidate
+      - id: check
+        run: node pipeline/check.ts
+
+  deploy:
+    needs: [check, recheck]
+    if: always() && (needs.check.outputs.passed == 'true' || needs.recheck.outputs.passed == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    env:
+      CANDIDATE: ${{ needs.check.outputs.passed == 'true' && 'candidate-1' || 'candidate-2' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.CANDIDATE }}
+          path: .candidate
+      - id: version
+        run: echo "version=v$(( $(git tag -l 'v*' | wc -l) + 1 ))" >> "$GITHUB_OUTPUT"
+      # Only the game folder is ever committed, so a build can't change the framework.
+      - name: Commit the new game version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          rm -rf game
+          cp -r .candidate/game game
+          git config user.name "community-game-bot"
+          git config user.email "community-game-bot@users.noreply.github.com"
+          git add game
+          git commit -m "Release $VERSION"
+          git tag "$VERSION"
+      - name: Confirm the release only changes the game
+        run: bash pipeline/verify-release.sh
+      - id: push
+        run: git push origin HEAD "refs/tags/$VERSION"
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+      - run: node pipeline/deploy.ts --game game "$VERSION"
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          GAME_FTP_HOST: ${{ secrets.GAME_FTP_HOST }}
+          GAME_FTP_USER: ${{ secrets.GAME_FTP_USER }}
+          GAME_FTP_PASSWORD: ${{ secrets.GAME_FTP_PASSWORD }}
+          GAME_FTP_DIR: ${{ vars.GAME_FTP_DIR }}
+      - name: Undo the commit if the upload failed
+        if: failure() && steps.push.outcome == 'success'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git revert --no-edit HEAD
+          git push origin HEAD ":refs/tags/$VERSION"
+
+  # A failure here means the site isn't isolated. GitHub emails you when a run fails.
+  verify-live:
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node pipeline/verify-live.ts
+
+  report:
+    needs: [check, recheck, deploy]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      CANDIDATE: ${{ needs.check.outputs.passed == 'true' && 'candidate-1' || 'candidate-2' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: ${{ env.CANDIDATE }}
+          path: .candidate
+      - run: node pipeline/report.ts
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          RELEASED: ${{ needs.deploy.result == 'success' }}
+          VERSION: ${{ needs.deploy.outputs.version }}

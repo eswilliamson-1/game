@@ -1,0 +1,82 @@
+:root {
+  --bg: #14161a;
+  --panel: #1d2026;
+  --line: #30343c;
+  --text: #ece9e2;
+  --muted: #a9a59b;
+  --accent: #e8b04b;
+  --accent-ink: #1b1608;
+  --good: #7ec699;
+  --bad: #ef8f83;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color: var(--accent); }
+h1, h2, h3 { line-height: 1.25; margin: 0 0 .5rem; }
+h1 { font-size: 1.6rem; }
+h2 { font-size: 1.15rem; }
+p { margin: 0 0 .75rem; }
+
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1.25rem; padding: .75rem 16px; border-bottom: 1px solid var(--line); }
+.brand { color: var(--text); font-weight: 700; text-decoration: none; }
+.top nav { display: flex; flex-wrap: wrap; gap: .25rem 1rem; }
+.top nav a { color: var(--muted); text-decoration: none; }
+.top nav a:hover { color: var(--text); }
+.account { margin-left: auto; display: flex; align-items: center; gap: .5rem; color: var(--muted); font-size: .9rem; }
+
+.notice { padding: .5rem 16px; background: #3a2f16; color: var(--accent); font-size: .9rem; }
+main { max-width: 1120px; margin: 0 auto; padding: 16px; }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+.game { width: 100%; height: min(72vh, 680px); border: 1px solid var(--line); border-radius: 8px; background: #000; display: block; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+.narrow { max-width: 720px; margin: 0 auto; }
+
+.muted { color: var(--muted); font-size: .9rem; }
+.error { color: var(--bad); font-size: .9rem; }
+.success { color: var(--good); font-size: .9rem; }
+
+.option { display: block; width: 100%; text-align: left; margin: .5rem 0 0; padding: .65rem .75rem; background: transparent; color: var(--text); border: 1px solid var(--line); border-radius: 6px; font: inherit; cursor: pointer; position: relative; overflow: hidden; }
+.option:hover:not(:disabled) { border-color: var(--accent); }
+.option:disabled { cursor: default; opacity: 1; }
+.option[aria-pressed="true"] { border-color: var(--accent); }
+.option .bar { position: absolute; inset: 0 auto 0 0; background: rgba(232, 176, 75, .14); }
+.option .label, .option .detail { position: relative; display: block; }
+.option .label { font-weight: 600; display: flex; justify-content: space-between; gap: .75rem; }
+.option .detail { color: var(--muted); font-size: .9rem; }
+
+button.primary, button.secondary { font: inherit; padding: .5rem .85rem; border-radius: 6px; cursor: pointer; border: 1px solid var(--line); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+button.secondary { background: transparent; color: var(--text); }
+button:disabled { opacity: .6; cursor: default; }
+input, textarea { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: .5rem .6rem; }
+textarea { min-height: 84px; resize: vertical; }
+label { display: block; margin-bottom: .25rem; font-size: .9rem; color: var(--muted); }
+.check { display: block; margin-top: .5rem; }
+.check input { width: auto; margin-right: .25rem; }
+.row { display: flex; gap: .5rem; align-items: center; margin-top: .5rem; flex-wrap: wrap; }
+.row .grow { flex: 1 1 160px; }
+
+.note { border-top: 1px solid var(--line); padding: 1rem 0; }
+.note:first-child { border-top: 0; padding-top: 0; }
+.tag { display: inline-block; font-size: .75rem; padding: 0 .4rem; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); margin-left: .35rem; }
+.credit { color: var(--accent); font-size: .9rem; }
+
+.meter { height: 8px; margin-bottom: .5rem; border-radius: 4px; background: var(--line); overflow: hidden; }
+.meter span { display: block; height: 100%; background: var(--accent); }
+.badge { margin: 0 .35rem .35rem 0; color: var(--accent); border-color: var(--accent); }
+.board { margin: 0; padding-left: 1.4rem; }
+.board li { margin-bottom: .25rem; }
+.board li span:first-child { margin-right: .5rem; }
+
+.rules h2 { margin-top: 1.25rem; }
+.rules ul { padding-left: 1.4rem; }
+.rules ol { padding-left: 1.4rem; }
+.rules li { margin-bottom: .6rem; }
+
+@media (max-width: 860px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .game { height: 60vh; }
+  .account { margin-left: 0; width: 100%; }
+}

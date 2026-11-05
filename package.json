@@ -1,0 +1,32 @@
+{
+  "name": "community-game",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"tests/*.test.ts\"",
+    "test:browser": "node pipeline/build-shell.ts && node --test \"tests/browser/*.test.ts\"",
+    "attack-test": "node pipeline/attack-test.ts",
+    "verify-live": "node pipeline/verify-live.ts",
+    "setup:github": "node pipeline/setup-github.ts",
+    "shell:build": "node pipeline/build-shell.ts",
+    "shell:preview": "node pipeline/build-shell.ts && node pipeline/serve.ts dist/shell 4173",
+    "shell:deploy": "node pipeline/build-shell.ts && node pipeline/deploy.ts --shell"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.4.0",
+    "@supabase/supabase-js": "2.119.0",
+    "basic-ftp": "6.2.5",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.15",
+    "@types/node": "26.6.6",
+    "esbuild": "0.28.2",
+    "playwright": "1.64.1",
+    "typescript": "7.0.2"
+  }
+}
