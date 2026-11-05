@@ -146,6 +146,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          # The newest main, so a commit made during a build can't block the release.
+          ref: main
           fetch-depth: 0
           fetch-tags: true
       - uses: actions/setup-node@v4
