@@ -22,15 +22,16 @@
       <canvas id="board"></canvas>
       <div id="overlay">
         <p id="overlayTitle">Ready?</p>
-        <p id="overlayText">Circles go left. Squares go right. Gold-edged shapes are worth 3 points. The little sorter bot between the bins is you!</p>
+        <p id="overlayText">Circles go left. Triangles go in the middle. Squares go right. Gold-edged shapes are worth 3 points. The little sorter bot beside the belt is you!</p>
         <button id="startBtn" type="button">Start</button>
       </div>
     </div>
     <div id="bins">
-      <button id="binLeft" class="bin left" type="button">Left bin: Circles</button>
-      <button id="binRight" class="bin right" type="button">Right bin: Squares</button>
+      <button id="binLeft" class="bin left" type="button">Circles</button>
+      <button id="binMid" class="bin mid" type="button">Triangles</button>
+      <button id="binRight" class="bin right" type="button">Squares</button>
     </div>
-    <p class="hint">Use the Left / Right arrow keys, tap a bin, or swipe the shape. Press M to toggle music.</p>
+    <p class="hint">Use the Left / Down / Right arrow keys, tap a bin, or swipe the shape left, down or right. Press M to toggle music.</p>
   </main>
   <script src="music.js"></script>
   <script src="game.js"></script>

@@ -14,9 +14,10 @@ h1 { font-size: 1.3rem; margin: 0; letter-spacing: 0.04em; }
 #overlayTitle { font-size: 1.6rem; font-weight: 700; margin: 0; }
 #overlayText { margin: 0; color: #c9c4b8; }
 #startBtn { margin-top: 8px; font: inherit; font-weight: 700; font-size: 1.1rem; padding: 10px 28px; border-radius: 10px; border: 0; background: #f0c040; color: #1a1a1a; cursor: pointer; }
-#bins { display: flex; gap: 10px; }
-.bin { flex: 1; font: inherit; font-weight: 700; padding: 14px 8px; border-radius: 10px; border: 2px solid transparent; color: #111; cursor: pointer; touch-action: manipulation; transition: transform 0.08s; }
+#bins { display: flex; gap: 8px; }
+.bin { flex: 1; min-width: 0; font: inherit; font-weight: 700; font-size: 0.95rem; padding: 14px 4px; border-radius: 10px; border: 2px solid transparent; color: #111; cursor: pointer; touch-action: manipulation; transition: transform 0.08s; }
 .bin.left { background: #f59a3c; }
+.bin.mid { background: #e467aa; }
 .bin.right { background: #2fb8b8; }
 .bin.pressed { transform: scale(0.95); border-color: #fff; }
 .hint { margin: 0; text-align: center; font-size: 0.8rem; color: #8a867d; }
