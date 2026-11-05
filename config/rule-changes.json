@@ -3,5 +3,6 @@
   { "date": "2026-11-04", "change": "Players are now credited and ranked by their username, in place of an optional public name." },
   { "date": "2026-11-04", "change": "Ballots were replaced by a public idea board. The top upvoted idea is built each round, and \"change nothing this round\" is always an option." },
   { "date": "2026-11-04", "change": "Ideas are now rated small, medium, or major, and bigger changes need more upvotes." },
-  { "date": "2026-11-05", "change": "Medium and major changes now start at one upvote. Their targets grow with the number of active players: a quarter of them for medium, half for major." }
+  { "date": "2026-11-05", "change": "Medium and major changes now start at one upvote. Their targets grow with the number of active players: a quarter of them for medium, half for major." },
+  { "date": "2026-11-05", "change": "Major changes now need a third of active players instead of half, and a player counts as active for three days." }
 ]

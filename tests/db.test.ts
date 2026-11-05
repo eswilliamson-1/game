@@ -87,6 +87,7 @@ before(async () => {
   await db.exec(readFileSync("supabase/migrations/0015_medium_needs_one.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0016_major_scales_down.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0017_active_means_three_days.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0018_major_needs_a_third.sql", "utf8"));
   moved = (await db.query<{ title: string }>(`select title from ideas where not is_no_change`)).rows.map((r) => r.title);
 });
 
@@ -653,14 +654,14 @@ test("bigger ideas need more upvotes, scaled to active players", async () => {
   await release();
   const [s, m, l] = [await sized("S", "small"), await sized("M", "medium"), await sized("L", "major")];
   assert.deepEqual([await need(s), await need(m), await need(l)], [1, 1, 1]);
-  await crowd(2);
+  await crowd(3);
   assert.deepEqual([await need(s), await need(m), await need(l)], [1, 1, 1]);
   await noCrowd();
-  await crowd(5);
-  assert.deepEqual([await need(s), await need(m), await need(l)], [1, 2, 3]);
+  await crowd(4);
+  assert.deepEqual([await need(s), await need(m), await need(l)], [1, 1, 2]);
   await noCrowd();
   await crowd(20);
-  assert.deepEqual([await need(s), await need(m), await need(l)], [1, 5, 10]);
+  assert.deepEqual([await need(s), await need(m), await need(l)], [1, 5, 7]);
   await noCrowd();
 });
 
@@ -700,7 +701,7 @@ test("if no idea reaches its target, nothing changes and the board says so", asy
 test("a major idea wins once it reaches its target", async () => {
   await reset();
   await release();
-  await crowd(3);
+  await crowd(6);
   const big = await sized("Big", "major");
   for (const uid of [ALICE, BOB, OWNER]) await up(uid, big);
   assert.equal((await endRound()).build.length, 1);
