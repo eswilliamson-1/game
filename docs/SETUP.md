@@ -39,7 +39,7 @@ The repository, label, and branch protection are already set up at `eswilliamson
    ```
 
 2. Create a fine-grained token limited to this repository, with Contents set to read and write. You'll use it in section 6.
-3. The release workflow pushes straight to the main branch, so test one release. If GitHub blocks it, give the workflow a bypass or a dedicated bot account.
+3. Main is protected from deletion and force pushes. It can't require pull requests, because the release workflow pushes straight to it and personal repositories can't exempt workflows. Only you can push, so outsiders still need a pull request that you merge.
 4. Don't merge pull requests from other people without reading every changed file.
 
 ## 5. Voting site
