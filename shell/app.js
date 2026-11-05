@@ -44,8 +44,10 @@ async function renderAccount(user) {
     box.replaceChildren(el("span", { textContent: "Not logged in" }));
     return;
   }
+  const [name, owner] = await Promise.all([api.myName(user.id), api.isOwner()]);
   box.replaceChildren(
-    el("span", { textContent: (await api.myName(user.id)) || "No name set" }),
+    el("span", { textContent: name || "No name set" }),
+    owner ? el("a", { href: "review.html", textContent: "Review" }) : "",
     el("a", { href: "privacy.html", textContent: "Your data" }),
     el("button", { class: "secondary", textContent: "Log out", onclick: guarded(() => api.signOut()) }),
   );

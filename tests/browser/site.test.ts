@@ -44,6 +44,15 @@ const logIn = async (page: Page) => {
   await page.waitForSelector("text=Log out");
 };
 
+test("the review link only appears for the owner", async () => {
+  const { page, errors } = await open("/");
+  await page.waitForSelector("#ballot");
+  assert.equal(await page.locator('#account a[href="review.html"]').count(), 0);
+  await logIn(page);
+  await page.waitForSelector('#account a[href="review.html"]');
+  assert.deepEqual(errors, []);
+});
+
 test("logged-out players see the ballot, but can't vote", async () => {
   const { page, errors } = await open("/");
   await page.waitForSelector("#ballot");
