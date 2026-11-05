@@ -154,7 +154,8 @@ if (preview) {
   const csp = `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src ${supabase} ${supabase.replace("https:", "wss:")}; frame-src https://${settings.hosts.game}; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`;
   writeFileSync(
     `${OUT}/.htaccess`,
-    `<IfModule mod_headers.c>\n  Header always set Content-Security-Policy "${csp}"\n  Header always set X-Content-Type-Options "nosniff"\n  Header always set Referrer-Policy "strict-origin-when-cross-origin"\n</IfModule>\nOptions -Indexes\n<IfModule mod_rewrite.c>\n  RewriteEngine On\n  RewriteCond %{HTTP_HOST} !^${settings.hosts.vote.replaceAll(".", "\\.")}$ [NC]\n  RewriteRule ^ - [F]\n</IfModule>\n`,
+    `<IfModule mod_headers.c>\n  Header always set Content-Security-Policy "${csp}"\n  Header always set Cache-Control "no-cache"
+  Header always set X-Content-Type-Options "nosniff"\n  Header always set Referrer-Policy "strict-origin-when-cross-origin"\n</IfModule>\nOptions -Indexes\n<IfModule mod_rewrite.c>\n  RewriteEngine On\n  RewriteCond %{HTTP_HOST} !^${settings.hosts.vote.replaceAll(".", "\\.")}$ [NC]\n  RewriteRule ^ - [F]\n</IfModule>\n`,
   );
 }
 console.log(`Built the voting site${preview ? " in preview mode" : ""}.`);
