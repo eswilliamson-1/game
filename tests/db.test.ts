@@ -32,6 +32,12 @@ async function as(role: string, uid: string, sql: string, params: unknown[] = []
 }
 const service = (sql: string, params: unknown[] = []) => as("service_role", "", sql, params);
 const user = (uid: string, sql: string, params: unknown[] = []) => as("authenticated", uid, sql, params);
+const setName = (uid: string, name: string) =>
+  db.query(
+    `insert into profiles (user_id, display_name) values ($1, $2)
+     on conflict (user_id) do update set display_name = excluded.display_name`,
+    [uid, name],
+  );
 
 async function reset() {
   await db.exec(`
@@ -60,6 +66,7 @@ before(async () => {
   await db.exec(readFileSync("supabase/migrations/0001_init.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0003_accounts_privacy.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0005_username_accounts.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0006_login_names.sql", "utf8"));
   await db.query(`insert into owners values ($1)`, [OWNER]);
 });
 
@@ -262,7 +269,7 @@ async function buildProposal(uid: string) {
 
 test("patch notes credit the player who suggested the change", async () => {
   await reset();
-  await user(BOB, "select set_display_name('Dragon Fan')");
+  await setName(BOB, "Dragon Fan");
   await buildProposal(BOB);
   const log = await as("anon", "", "select credit, title from changes");
   assert.deepEqual(log.rows, [{ credit: "Dragon Fan", title: "Pet dragon" }]);
@@ -276,20 +283,24 @@ test("players with no name are credited as 'a player', and AI ideas as the AI", 
   assert.equal((await ballot(id)).credit, "the AI");
 });
 
-test("display names are validated, unique, and private until credited", async () => {
+test("usernames become public names, can't be changed, and reserved ones are refused", async () => {
   await reset();
-  for (const bad of ["x", "<b>bold</b>", "Site Admin", "The Owner", "Claude", "a".repeat(25), "evil.com"]) {
-    await assert.rejects(user(ALICE, "select set_display_name($1)", [bad]), /./, bad);
+  const add = (email: string) => db.query(`insert into auth.users (id, email) values (gen_random_uuid(), $1)`, [email]);
+  await add("dragon_fan@players.ewpages.com");
+  const { rows } = await db.query<Record<string, any>>(`select display_name from profiles`);
+  assert.deepEqual(rows, [{ display_name: "dragon_fan" }]);
+  for (const bad of ["site_admin", "the-owner", "claude", "ewpages1"]) {
+    await assert.rejects(add(`${bad}@players.ewpages.com`), /reserved/, bad);
   }
-  await user(ALICE, "select set_display_name('Alice')");
-  await assert.rejects(user(BOB, "select set_display_name('Alice')"), /taken/);
-  assert.equal((await user(BOB, "select * from profiles")).rows.length, 0);
+  await assert.rejects(user(ALICE, "select set_display_name('New Name')"));
+  await assert.rejects(user(ALICE, "select remove_my_name()"));
   await assert.rejects(as("anon", "", "select * from profiles"));
+  await db.query(`delete from auth.users where email = 'dragon_fan@players.ewpages.com'`);
 });
 
 test("the owner can remove an offensive name from the public history", async () => {
   await reset();
-  await user(BOB, "select set_display_name('Rude Name')");
+  await setName(BOB, "Rude Name");
   await buildProposal(BOB);
   await assert.rejects(user(ALICE, "select clear_display_name('Rude Name')"));
   await user(OWNER, "select clear_display_name('Rude Name')");
@@ -302,9 +313,9 @@ const addCarol = () => db.query(`insert into auth.users (id) values ($1) on conf
 test("deleting an account removes the player and every credit, including old names", async () => {
   await reset();
   await addCarol();
-  await user(CAROL, "select set_display_name('Old Name')");
+  await setName(CAROL, "Old Name");
   await buildProposal(CAROL);
-  await user(CAROL, "select set_display_name('New Name')");
+  await setName(CAROL, "New Name");
   await user(CAROL, "select submit_proposal('A second idea')");
   await user(CAROL, "select delete_my_account()");
 
@@ -326,15 +337,6 @@ test("players can't erase or inspect someone else", async () => {
   await assert.rejects(user(ALICE, `select erase_player('${BOB}')`));
   await assert.rejects(user(ALICE, `select player_stats('${BOB}')`));
   await assert.rejects(user(ALICE, "select purge_old_data()"));
-});
-
-test("removing a name changes past credit to 'a player'", async () => {
-  await reset();
-  await user(BOB, "select set_display_name('Dragon Fan')");
-  await buildProposal(BOB);
-  await user(BOB, "select remove_my_name()");
-  assert.equal((await as("anon", "", "select credit from changes")).rows[0].credit, "a player");
-  assert.equal((await as("authenticated", BOB, "select display_name from profiles")).rows[0].display_name, null);
 });
 
 test("a data export holds only that player's data", async () => {
@@ -429,8 +431,8 @@ test("the leaderboard shows only named players with points, and is public", asyn
   const { id, options } = await openBallot();
   await user(ALICE, "select cast_vote($1, $2)", [id, options[0].id]);
   await user(BOB, "select cast_vote($1, $2)", [id, options[0].id]);
-  await user(BOB, "select set_display_name('Named Bob')");
-  await user(OWNER, "select set_display_name('Idle One')");
+  await setName(BOB, "Named Bob");
+  await setName(OWNER, "Idle One");
   const board = await as("anon", "", "select * from leaderboard()");
   assert.deepEqual(board.rows, [{ name: "Named Bob", points: 1 }]);
 });

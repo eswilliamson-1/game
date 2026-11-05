@@ -16,4 +16,4 @@
 14. **Rule changes:** only the site owner can change these rules, at any time. Votes, proposals, and the AI can't, and every change is publicly recorded.
 15. **Protected framework:** votes and proposals can only change the game itself. They can't change the systems that run it, including voting, screening, review, building, testing, publishing, and the website around the game. Only the site owner can change those.
 16. **Player privacy:** accounts need only a username and password, with no email address or verification, and players are never sent email. Players can download or delete their data at any time. Only what the privacy page describes is kept, and it's never sold.
-17. **Fair rewards:** points, levels, and badges reward taking part, never which option a player picks. Only players who choose a public name appear on the leaderboard.
+17. **Fair rewards:** points, levels, and badges reward taking part, never which option a player picks. Players are credited and ranked by their username.

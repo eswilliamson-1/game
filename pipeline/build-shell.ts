@@ -50,10 +50,10 @@ function privacyHtml(): string {
     <p>This site is run by ${who}, who is responsible for your data. Contact: ${reach}.</p>
     <h2>What we keep</h2>
     <ul>
-      <li><strong>Your username and password.</strong> The password is stored only as a secure hash, so nobody can read it. We don't ask for your email or your real name, and usernames are never shown publicly.</li>
+      <li><strong>Your username and password.</strong> The password is stored only as a secure hash, so nobody can read it. We don't ask for your email or your real name. Your username is public, so please don't use your real name.</li>
       <li><strong>Your votes</strong>, which are never shown next to your name or ID.</li>
       <li><strong>Your suggestions.</strong> The owner can read them, and an AI turns them into a public summary.</li>
-      <li><strong>Your public name</strong>, if you choose one. It's shown when a suggestion of yours reaches a ballot or the patch notes, and on the leaderboard with your points and level. Without a public name, you never appear on the leaderboard.</li>
+      <li><strong>Public credit.</strong> Your username is shown when a suggestion of yours reaches a ballot or the patch notes, and on the leaderboard with your points and level.</li>
       <li><strong>Your points, level, and badges</strong>, worked out from the activity above.</li>
       <li><strong>Technical logs</strong>, including IP addresses, kept by our hosting and database providers for security.</li>
     </ul>
@@ -65,7 +65,7 @@ function privacyHtml(): string {
       <li><strong>Supabase</strong> stores accounts, votes, and suggestions in ${region}.</li>
       <li><strong>Anthropic</strong> processes suggestions to screen them and build changes.</li>
       <li><strong>Hostinger</strong> hosts the website.</li>
-      <li><strong>GitHub</strong> runs the build system and publishes the game's code and change summaries, but never usernames.</li>
+      <li><strong>GitHub</strong> runs the build system and publishes the game's code and change summaries, but never passwords or votes.</li>
     </ul>
     <p>Some of these providers may handle data outside your country, under their own data protection terms.</p>
     <h2>How long we keep it</h2>

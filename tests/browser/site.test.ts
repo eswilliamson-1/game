@@ -76,14 +76,14 @@ test("a logged-in player can vote and change their vote", async () => {
   assert.deepEqual(errors, []);
 });
 
-test("a logged-in player can set a name and suggest a change", async () => {
+test("a logged-in player suggests a change under their username", async () => {
   const { page, errors } = await open("/");
   await logIn(page);
-  await page.fill("#display-name", "Dragon Fan");
+  await page.waitForSelector("#account >> text=dragon_fan");
+  assert.equal(await page.locator("#display-name").count(), 0);
   await page.fill("#proposal", "Add a pet dragon");
   await page.click("text=Submit");
   await page.waitForSelector("text=checked against the rules");
-  await page.waitForSelector("#account >> text=Dragon Fan");
   assert.deepEqual(errors, []);
 });
 
@@ -117,15 +117,6 @@ test("returning players log in without the age check, and can log out", async ()
   await page.waitForSelector("text=Log out");
   await page.click("text=Log out");
   await page.waitForSelector("#username");
-  assert.deepEqual(errors, []);
-});
-
-test("a player can suggest a change without a public name", async () => {
-  const { page, errors } = await open("/");
-  await logIn(page);
-  await page.fill("#proposal", "Add a pet dragon");
-  await page.click("text=Submit");
-  await page.waitForSelector("text=checked against the rules");
   assert.deepEqual(errors, []);
 });
 

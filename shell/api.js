@@ -20,7 +20,11 @@ export function liveApi(url, key) {
     },
     async signUp(username, password) {
       const { data, error } = await db.auth.signUp({ email: accountEmail(username), password });
-      if (error) throw new Error(/already/i.test(error.message) ? "That username is taken." : error.message);
+      if (error) {
+        if (/already/i.test(error.message)) throw new Error("That username is taken.");
+        if (/database error/i.test(error.message)) throw new Error("That username isn't allowed.");
+        throw new Error(error.message);
+      }
       if (!data.session) throw new Error("Accounts aren't set up correctly yet. Please try again later.");
     },
     async signIn(username, password) {
@@ -47,8 +51,6 @@ export function liveApi(url, key) {
     vote: async (ballot, option) => must(await db.rpc("cast_vote", { p_ballot: ballot, p_option: option })),
     propose: async (body) => must(await db.rpc("submit_proposal", { p_body: body })),
     myName: async (userId) => must(await db.from("profiles").select("display_name").eq("user_id", userId).maybeSingle())?.display_name ?? "",
-    setName: async (name) => must(await db.rpc("set_display_name", { p_name: name })),
-    removeName: async () => must(await db.rpc("remove_my_name")),
     myProgress: async () => must(await db.rpc("my_progress")),
     leaderboard: async () => must(await db.rpc("leaderboard")),
     exportData: async () => must(await db.rpc("export_my_data")),
@@ -94,24 +96,25 @@ export function previewApi() {
   };
   let vote = null;
   // Kept for the tab, so the preview stays joined between pages.
-  let signedIn = sessionStorage.getItem("preview-joined") === "1";
-  let name = "";
+  let name = sessionStorage.getItem("preview-name") ?? "";
+  let signedIn = Boolean(name);
+  const join = (username) => {
+    signedIn = true;
+    name = username.toLowerCase();
+    sessionStorage.setItem("preview-name", name);
+  };
+  const leave = () => {
+    signedIn = false;
+    name = "";
+    sessionStorage.removeItem("preview-name");
+  };
   const when = (hours) => new Date(Date.now() - hours * 3_600_000).toISOString();
   return {
     preview: true,
     user: async () => (signedIn ? { id: "preview" } : null),
-    signUp: async () => {
-      signedIn = true;
-      sessionStorage.setItem("preview-joined", "1");
-    },
-    signIn: async () => {
-      signedIn = true;
-      sessionStorage.setItem("preview-joined", "1");
-    },
-    signOut: async () => {
-      signedIn = false;
-      sessionStorage.removeItem("preview-joined");
-    },
+    signUp: async (username) => join(username),
+    signIn: async (username) => join(username),
+    signOut: async () => leave(),
     onAuthChange: () => {},
     isOwner: async () => signedIn,
     paused: async () => false,
@@ -124,12 +127,6 @@ export function previewApi() {
     },
     propose: async () => {},
     myName: async () => name,
-    setName: async (value) => {
-      name = value;
-    },
-    removeName: async () => {
-      name = "";
-    },
     myProgress: async () => ({ votes: vote ? 6 : 5, streak: vote ? 6 : 5, on_ballot: 1, built: 0, points: vote ? 11 : 10 }),
     leaderboard: async () => [
       { name: "Dragon Fan", points: 46 },
@@ -137,9 +134,7 @@ export function previewApi() {
     ],
     exportData: async () => ({ player_id: "preview", username: "preview", public_name: name || null, suggestions: [], votes: [] }),
     deleteAccount: async () => {
-      signedIn = false;
-      sessionStorage.removeItem("preview-joined");
-      name = "";
+      leave();
       vote = null;
     },
     recentProposals: async () => [

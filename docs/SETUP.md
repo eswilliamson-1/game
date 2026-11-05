@@ -12,7 +12,7 @@ Do these in order. Each step needs your own login, so you enter every password a
 ## 2. Supabase
 
 1. Create a new project, separate from Delve's.
-2. In the SQL editor, run `supabase/migrations/0001_init.sql`, `supabase/migrations/0003_accounts_privacy.sql`, and `supabase/migrations/0005_username_accounts.sql`. Skip any you've already run.
+2. In the SQL editor, run `supabase/migrations/0001_init.sql`, `supabase/migrations/0003_accounts_privacy.sql`, `supabase/migrations/0005_username_accounts.sql`, and `supabase/migrations/0006_login_names.sql`. Skip any you've already run.
 3. Under Authentication > Sign In / Providers, keep new user sign-ups on and the Email provider on, then turn off **Confirm email**. If this is left on, accounts won't work. Turn off anonymous sign-ins and every other provider, and set the minimum password length to 8. Players log in with a username and the site never sends email, so you don't need an email service.
 4. Accept Supabase's data processing agreement, and note the project's region for section 5.
 5. After section 5, create an account on the voting site with a strong password from your password manager. Then make yourself the owner in the SQL editor:

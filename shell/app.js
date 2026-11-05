@@ -46,7 +46,7 @@ async function renderAccount(user) {
   }
   const [name, owner] = await Promise.all([api.myName(user.id), api.isOwner()]);
   box.replaceChildren(
-    el("span", { textContent: name || "No name set" }),
+    el("span", { textContent: name || "Player" }),
     owner ? el("a", { href: "review.html", textContent: "Review" }) : "",
     el("a", { href: "privacy.html", textContent: "Your data" }),
     el("button", { class: "secondary", textContent: "Log out", onclick: guarded(() => api.signOut()) }),
@@ -74,7 +74,7 @@ function accountForm() {
   };
   form.append(
     el("h2", { textContent: "Log in to vote and suggest changes" }),
-    el("label", { htmlFor: "username", textContent: "Username (letters, numbers, dashes, and underscores)" }),
+    el("label", { htmlFor: "username", textContent: "Username, shown publicly (letters, numbers, dashes, and underscores)" }),
     username,
     el("label", { htmlFor: "password", textContent: "Password (at least 8 characters)" }),
     password,
@@ -137,9 +137,8 @@ function ballotPanel(ballot, user, mine) {
   );
 }
 
-function proposalPanel(user, name) {
+function proposalPanel(user) {
   const body = el("textarea", { id: "proposal", maxLength: config.maxProposalChars, required: true });
-  const nameInput = el("input", { id: "display-name", value: name, maxLength: 24 });
   const status = el("div");
   return el(
     "section",
@@ -152,19 +151,14 @@ function proposalPanel(user, name) {
             onsubmit: async (event) => {
               event.preventDefault();
               try {
-                const wanted = nameInput.value.trim();
-                if (wanted !== name) await (wanted ? api.setName(wanted) : api.removeName());
                 await api.propose(body.value);
                 body.value = "";
                 status.replaceChildren(el("p", { class: "success", textContent: "Thanks. It will be checked against the rules before it reaches a ballot." }));
-                renderAccount(user);
               } catch (error) {
                 showError(status, error);
               }
             },
           },
-          el("label", { htmlFor: "display-name", textContent: "Public name for the patch notes and leaderboard (optional, and best not your real name)" }),
-          nameInput,
           el("label", { htmlFor: "proposal", textContent: `Your idea, in plain text (up to ${config.maxProposalChars} characters). Don't include personal details.` }),
           body,
           el("div", { class: "row" }, el("button", { class: "primary", textContent: "Submit" })),
@@ -217,17 +211,16 @@ function leaderboardPanel(rows) {
     el("h2", { textContent: "Top players" }),
     rows.length
       ? el("ol", { class: "board" }, ...rows.map((row) => el("li", {}, el("span", { textContent: row.name }), el("span", { class: "muted", textContent: `${levelFor(row.points).name} · ${row.points}` }))))
-      : el("p", { class: "muted", textContent: "Nobody yet. Set a public name to appear here." }),
+      : el("p", { class: "muted", textContent: "Nobody yet. Vote to get on the board." }),
   );
 }
 
 async function renderHome() {
   const user = await api.user();
-  const [ballot, proposals, paused, name, progress, board] = await Promise.all([
+  const [ballot, proposals, paused, progress, board] = await Promise.all([
     api.currentBallot(),
     api.recentProposals(),
     api.paused(),
-    user ? api.myName(user.id) : "",
     user ? api.myProgress() : null,
     api.leaderboard(),
   ]);
@@ -239,7 +232,7 @@ async function renderHome() {
     ballot
       ? ballotPanel(ballot, user, mine)
       : el("section", { class: "panel" }, el("h2", { textContent: "Current vote" }), el("p", { class: "muted", textContent: "The next vote will appear here soon." })),
-    proposalPanel(user, name),
+    proposalPanel(user),
     leaderboardPanel(board),
     el(
       "section",
