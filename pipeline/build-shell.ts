@@ -89,9 +89,9 @@ const PAGES: Record<string, { title: string; page: string; content: string }> = 
   "index.html": {
     title: "Play & vote",
     page: "home",
-    content: `<div class="layout">
+    content: `<iframe class="game" title="The community game" src="${gameUrl}" sandbox="allow-scripts allow-same-origin"></iframe>
+    <div class="layout">
       <div class="stage">
-        <iframe class="game" title="The community game" src="${gameUrl}" sandbox="allow-scripts allow-same-origin"></iframe>
         <div id="board-slot"></div>
       </div>
       <div id="side"></div>

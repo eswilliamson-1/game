@@ -26,17 +26,16 @@ p { margin: 0 0 .75rem; }
 .account { margin-left: auto; display: flex; align-items: center; gap: .5rem; color: var(--muted); font-size: .9rem; }
 
 .notice { padding: .5rem 16px; background: #3a2f16; color: var(--accent); font-size: .9rem; }
-main { max-width: 1280px; margin: 0 auto; padding: 16px; }
+main { max-width: 1760px; margin: 0 auto; padding: 16px; }
 
 .layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
 .stage { min-width: 0; }
-.stage .panel { margin-top: 16px; }
 .ideas { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: .5rem; margin-top: .25rem; }
 .ideas .option { margin: 0; }
 .ideas .nothing { grid-column: 1 / -1; }
 .option .size { position: relative; display: block; margin-top: .25rem; font-size: .8rem; color: var(--bad); }
 .option .size.ready { color: var(--good); }
-.game { width: 100%; height: min(58vh, 540px); border: 1px solid var(--line); border-radius: 8px; background: #000; display: block; }
+.game { width: 100%; height: max(420px, calc(100vh - 110px)); margin-bottom: 16px; border: 1px solid var(--line); border-radius: 8px; background: #000; display: block; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
 .narrow { max-width: 720px; margin: 0 auto; }
 
@@ -86,6 +85,6 @@ label { display: block; margin-bottom: .25rem; font-size: .9rem; color: var(--mu
 
 @media (max-width: 860px) {
   .layout { grid-template-columns: minmax(0, 1fr); }
-  .game { height: 60vh; }
+  .game { height: max(360px, calc(100svh - 150px)); }
   .account { margin-left: 0; width: 100%; }
 }

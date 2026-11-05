@@ -100,6 +100,7 @@ Technical limits, enforced by an automated scan and a browser security policy. A
 - No Date or Intl. Use performance.now for timing, so behavior can't depend on the calendar.
 - Saves use localStorage only. Don't read anything about the player or their device.
 - Total size under ${Math.floor(settings.performance.maxDownloadBytes / 1048576)} MB, and it must run well on a mid-range phone.
+- The game runs in a frame that fills most of the screen. Its play area must use all the width and height it can, with no fixed maximum size, on both large screens and phones.
 
 Every release must define a global object for the automated play test:
 window.gameTest = { inputsHandled: <number, incremented whenever the game handles player input>, goal: <short string telling the player what to do or aim for> }
