@@ -42,6 +42,149 @@
   var lastType = -1, sameCount = 0;
   var glowT = 0;
 
+  // ---- 3D avatar (the player's sorter bot) ----
+  var AV = { yaw: 0, pointT: 0, side: 1, hop: 0, hurt: 0 };
+  var AV_FACES = [[4, 5, 7, 6], [1, 0, 2, 3], [5, 1, 3, 7], [0, 4, 6, 2], [6, 7, 3, 2], [0, 1, 5, 4]];
+  var AV_D = 5, AV_PITCH = 0.32;
+  var AV_L = (function () {
+    var x = -0.45, y = 0.75, z = 0.6, m = Math.sqrt(x * x + y * y + z * z);
+    return [x / m, y / m, z / m];
+  })();
+  var AV_BODY = [150, 122, 215], AV_HEAD = [226, 222, 210], AV_DARK = [34, 38, 50];
+  var AV_EYE = [120, 230, 255], AV_LEG = [84, 90, 108], AV_GOLD = [255, 212, 70];
+
+  function avatarPoint(dir) { AV.side = dir; AV.pointT = 1; }
+
+  function updateAvatar(dt) {
+    if (AV.pointT > 0) AV.pointT = Math.max(0, AV.pointT - dt / 0.45);
+    if (AV.hop > 0) AV.hop = Math.max(0, AV.hop - dt / 0.35);
+    if (AV.hurt > 0) AV.hurt = Math.max(0, AV.hurt - dt / 0.5);
+    var target;
+    if (state === "play") target = AV.pointT > 0 ? AV.side * 0.85 : 0;
+    else target = Math.sin(glowT * 0.9) * 0.7;
+    AV.yaw += (target - AV.yaw) * Math.min(1, dt * 14);
+  }
+
+  function tint(col, h) {
+    var m = h * 0.6;
+    return [col[0] + (235 - col[0]) * m, col[1] + (70 - col[1]) * m, col[2] + (70 - col[2]) * m];
+  }
+
+  function addBox(list, g, cx, cy, cz, hx, hy, hz, col, px, py, rz, rx) {
+    var v = [];
+    var cz1 = Math.cos(rz || 0), sz1 = Math.sin(rz || 0);
+    var cx1 = Math.cos(rx || 0), sx1 = Math.sin(rx || 0);
+    var i, x, y, z, dx, dy;
+    for (i = 0; i < 8; i++) {
+      x = cx + ((i & 1) ? hx : -hx);
+      y = cy + ((i & 2) ? hy : -hy);
+      z = cz + ((i & 4) ? hz : -hz);
+      if (rz) {
+        dx = x - px; dy = y - py;
+        x = px + dx * cz1 - dy * sz1;
+        y = py + dx * sz1 + dy * cz1;
+      }
+      if (rx) {
+        dy = y - py;
+        var nz = dy * sx1 + z * cx1;
+        y = py + dy * cx1 - z * sx1;
+        z = nz;
+      }
+      x += g.ox; y += g.oy;
+      var x1 = x * g.cyaw + z * g.syaw;
+      var z1 = -x * g.syaw + z * g.cyaw;
+      var y1 = y - 1;
+      v.push([x1, y1 * g.cp - z1 * g.sp, y1 * g.sp + z1 * g.cp]);
+    }
+    var c = tint(col, g.hurt);
+    for (var f = 0; f < 6; f++) {
+      var idx = AV_FACES[f];
+      var a = v[idx[0]], b = v[idx[1]], d = v[idx[2]];
+      var ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
+      var wx = d[0] - a[0], wy = d[1] - a[1], wz = d[2] - a[2];
+      var nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nzz = ux * wy - uy * wx;
+      if (nx * (-a[0]) + ny * (-a[1]) + nzz * (AV_D - a[2]) <= 0) continue;
+      var nl = Math.sqrt(nx * nx + ny * ny + nzz * nzz) || 1;
+      var lit = (nx * AV_L[0] + ny * AV_L[1] + nzz * AV_L[2]) / nl;
+      var shade = 0.38 + 0.62 * Math.max(0, lit);
+      var zsum = 0, pts = [];
+      for (var j = 0; j < 4; j++) {
+        var p = v[idx[j]];
+        zsum += p[2];
+        var sc = AV_D / (AV_D - p[2]);
+        pts.push(g.scrX + p[0] * sc * g.k, g.scrY - p[1] * sc * g.k);
+      }
+      list.push({
+        pts: pts,
+        z: zsum / 4,
+        col: "rgb(" + Math.round(c[0] * shade) + "," + Math.round(c[1] * shade) + "," + Math.round(c[2] * shade) + ")"
+      });
+    }
+  }
+
+  function drawAvatar() {
+    var k = Math.min(H * 0.085, W * 0.09);
+    var hopY = AV.hop > 0 ? Math.sin((1 - AV.hop) * Math.PI) * 0.28 : 0;
+    var shake = AV.hurt > 0 ? Math.sin(glowT * 55) * 0.07 * AV.hurt : 0;
+    var bob = Math.sin(glowT * 2.4) * 0.025;
+    var g = {
+      ox: shake, oy: hopY + bob,
+      cyaw: Math.cos(AV.yaw), syaw: Math.sin(AV.yaw),
+      cp: Math.cos(AV_PITCH), sp: Math.sin(AV_PITCH),
+      k: k, scrX: W / 2, scrY: H * 0.975 - k, hurt: AV.hurt
+    };
+
+    // floor shadow
+    var fsc = AV_D / (AV_D + g.sp);
+    var footY = g.scrY + g.cp * fsc * k;
+    ctx.fillStyle = "rgba(0,0,0," + (0.35 - hopY * 0.6) + ")";
+    ctx.beginPath();
+    ctx.ellipse(W / 2, footY, k * 0.55 * (1 - hopY), k * 0.17 * (1 - hopY), 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    var list = [];
+    var armAmt = Math.min(1, AV.pointT * 2.5);
+    var idle = 0.08 + Math.sin(glowT * 2.4) * 0.03;
+    var near = -AV.side; // the arm closer to the viewer when turned
+
+    // legs
+    addBox(list, g, -0.15, 0.36, 0, 0.11, 0.36, 0.13, AV_LEG);
+    addBox(list, g, 0.15, 0.36, 0, 0.11, 0.36, 0.13, AV_LEG);
+    // torso + chest panel
+    addBox(list, g, 0, 1.05, 0, 0.33, 0.33, 0.2, AV_BODY);
+    addBox(list, g, 0, 1.1, 0.215, 0.11, 0.08, 0.02, AV_GOLD);
+    // arms
+    var rRx = (near > 0) ? -armAmt * 1.45 : 0;
+    var lRx = (near < 0) ? -armAmt * 1.45 : 0;
+    addBox(list, g, 0.45, 1.03, 0, 0.1, 0.32, 0.11, AV_BODY, 0.45, 1.32, idle, rRx);
+    addBox(list, g, -0.45, 1.03, 0, 0.1, 0.32, 0.11, AV_BODY, -0.45, 1.32, -idle, lRx);
+    // head, visor, eyes
+    addBox(list, g, 0, 1.62, 0, 0.27, 0.27, 0.27, AV_HEAD);
+    addBox(list, g, 0, 1.64, 0.28, 0.22, 0.09, 0.02, AV_DARK);
+    addBox(list, g, -0.1, 1.64, 0.305, 0.05, 0.04, 0.012, AV_EYE);
+    addBox(list, g, 0.1, 1.64, 0.305, 0.05, 0.04, 0.012, AV_EYE);
+    // antenna
+    addBox(list, g, 0, 1.98, 0, 0.025, 0.09, 0.025, AV_DARK);
+    addBox(list, g, 0, 2.11, 0, 0.06, 0.06, 0.06, AV_GOLD);
+
+    list.sort(function (a, b) { return a.z - b.z; });
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(10,12,16,0.35)";
+    for (var i = 0; i < list.length; i++) {
+      var p = list[i].pts;
+      ctx.fillStyle = list[i].col;
+      ctx.beginPath();
+      ctx.moveTo(p[0], p[1]);
+      ctx.lineTo(p[2], p[3]);
+      ctx.lineTo(p[4], p[5]);
+      ctx.lineTo(p[6], p[7]);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+
   function resize() {
     var r = stage.getBoundingClientRect();
     W = Math.max(200, r.width);
@@ -84,6 +227,7 @@
     score = 0; miss = 0; shape = null; fliers = [];
     spawnDelay = 0.5; msg = ""; msgT = 0; flash = 0;
     lastType = -1; sameCount = 0;
+    AV.pointT = 0; AV.hop = 0; AV.hurt = 0;
     state = "play";
     overlay.classList.add("hidden");
     startBtn.blur();
@@ -109,6 +253,7 @@
 
   function mistake(text) {
     miss++;
+    AV.hurt = 1;
     showMsg(text, false, false);
     updateHud();
     if (miss >= 3) endRound();
@@ -124,6 +269,7 @@
     if (state !== "play") return;
     window.gameTest.inputsHandled++;
     pressVisual(dir);
+    avatarPoint(dir);
     if (!shape) return;
     var t = TYPES[shape.type];
     var gold = !!shape.gold;
@@ -134,6 +280,7 @@
     if (t.side === dir) {
       score += gold ? 3 : 1;
       if (score > best) best = score;
+      AV.hop = 1;
       showMsg(gold ? "+3" : "+1", true, gold);
       updateHud();
     } else {
@@ -165,6 +312,7 @@
     }
     if (flash > 0) flash = Math.max(0, flash - dt);
     if (msgT > 0) msgT = Math.max(0, msgT - dt);
+    updateAvatar(dt);
   }
 
   function drawShape(type, x, y, s, alpha, gold) {
@@ -258,6 +406,8 @@
 
     drawBin(-1);
     drawBin(1);
+
+    drawAvatar();
 
     if (shape) drawShape(shape.type, shape.x, shape.y, size(), 1, shape.gold);
 
