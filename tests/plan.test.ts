@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { NoAnswer, type AI, type ScreenResult } from "../pipeline/lib/ai.ts";
+import Anthropic, { APIError, AnthropicError } from "@anthropic-ai/sdk";
+import { createAI, NoAnswer, type AI, type ScreenResult } from "../pipeline/lib/ai.ts";
 import { runPlan, type Proposal, type Store } from "../pipeline/lib/plan.ts";
 import { buildCandidate, stillFits } from "../pipeline/build.ts";
 import type { Spec } from "../pipeline/lib/safety.ts";
@@ -61,6 +62,19 @@ const proposal = (id: number, body = "Add a pet dragon", reason: string | null =
 const run = (ai: AI, store: Store) => runPlan({ ai, store, game: "", notifyOwner: async () => {} });
 const screenAs = (result: Partial<ScreenResult>) => async () =>
   ({ verdict: "pass", public_reason: "", spec: EMPTY, ...result }) as ScreenResult;
+
+const failingClient = (error: Error) =>
+  ({ messages: { stream: () => ({ finalMessage: async () => { throw error; } }) } }) as unknown as Anthropic;
+
+test("a reply cut off partway counts as no answer", async () => {
+  const ai = createAI(failingClient(new AnthropicError("Failed to parse structured output")));
+  await assert.rejects(ai.screen("Add a dragon"), NoAnswer);
+});
+
+test("a real API failure still stops the run", async () => {
+  const error = new APIError(500, undefined, "Server error", undefined);
+  await assert.rejects(createAI(failingClient(error)).screen("Add a dragon"), (e) => e === error);
+});
 
 test("a clean proposal goes through both AI checks onto the board", async () => {
   const { store, log } = fakeStore([proposal(1)], true);

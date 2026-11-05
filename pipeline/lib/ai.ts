@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import Anthropic from "@anthropic-ai/sdk";
+import Anthropic, { APIError, AnthropicError } from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import settings from "../../config/settings.json" with { type: "json" };
@@ -131,7 +131,15 @@ export function createAI(client = new Anthropic()): AI {
       messages: [{ role: "user", content: user }],
       output_config: { effort, format: zodOutputFormat(schema) },
     });
-    const message = await stream.finalMessage();
+    let message;
+    try {
+      message = await stream.finalMessage();
+    } catch (error) {
+      // The SDK parses as it streams, so a reply cut off partway fails here. Real
+      // API failures are APIErrors, and those should still stop the run.
+      if (error instanceof AnthropicError && !(error instanceof APIError)) throw new NoAnswer(error.message);
+      throw error;
+    }
     if (message.stop_reason !== "end_turn") throw new NoAnswer(`Stopped: ${message.stop_reason}`);
     const text = message.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
     let json: unknown;
