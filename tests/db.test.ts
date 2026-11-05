@@ -80,6 +80,7 @@ before(async () => {
   await db.query(`select create_ballot('Old question', 'ai', null, '[{"label":"Old idea"}]', false)`);
   await db.exec(readFileSync("supabase/migrations/0009_idea_board.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0010_build_stage.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0011_fresh_ai_ideas.sql", "utf8"));
   moved = (await db.query<{ title: string }>(`select title from ideas where not is_no_change`)).rows.map((r) => r.title);
 });
 
@@ -129,6 +130,28 @@ test("a build starts at the writing stage, and anyone can see how far along it i
   await service(`update ballots set build_stage = 'testing' where id = $1`, [build[0]]);
   assert.equal((await read()).rows[0].build_stage, "testing");
   await assert.rejects(service(`update ballots set build_stage = 'anything' where id = $1`, [build[0]]));
+});
+
+test("a release clears old AI ideas and asks for new ones, but keeps player ideas", async () => {
+  await reset();
+  const { rows } = await user(BOB, `select submit_proposal('Add a pet dragon') as id`);
+  const [winner, stale, mine] = [await addIdea("Winner"), await addIdea("Old AI idea"), await addIdea("Player idea", false, rows[0].id)];
+  await db.exec(`update settings set last_ai_ideas_at = now()`);
+  await up(ALICE, winner);
+  const { build } = await endRound();
+  await service(`select complete_build($1, true, 'v1', 'Winner', 'Done')`, [build[0]]);
+  assert.equal((await idea(stale)).status, "rejected");
+  assert.equal((await idea(mine)).status, "open");
+  assert.equal((await round()).last_ai_ideas_at, null);
+});
+
+test("a failed build keeps the AI ideas", async () => {
+  await reset();
+  const [winner, other] = [await addIdea("Winner"), await addIdea("Other")];
+  await up(ALICE, winner);
+  const { build } = await endRound();
+  await service(`select complete_build($1, false, null, 'Winner', 'Failed')`, [build[0]]);
+  assert.equal((await idea(other)).status, "open");
 });
 
 test("the top idea wins, and other votes carry into the next round", async () => {
