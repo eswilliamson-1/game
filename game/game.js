@@ -4,6 +4,8 @@
   var GOAL = "Sort each shape into its matching bin before it reaches the end. Gold shapes are worth 3 points. Three mistakes ends the round.";
   window.gameTest = { inputsHandled: 0, goal: GOAL };
 
+  var music = window.TechnoMusic || { start: function () {}, stop: function () {}, tick: function () {}, setMuted: function () {}, isMuted: function () { return true; } };
+
   var canvas = document.getElementById("board");
   var ctx = canvas.getContext("2d");
   var stage = document.getElementById("stage");
@@ -17,8 +19,19 @@
   var startBtn = document.getElementById("startBtn");
   var binLeft = document.getElementById("binLeft");
   var binRight = document.getElementById("binRight");
+  var musicBtn = document.getElementById("musicBtn");
 
   goalEl.textContent = GOAL;
+
+  function updateMusicBtn() {
+    musicBtn.textContent = music.isMuted() ? "Music: Off" : "Music: On";
+  }
+
+  function toggleMusic() {
+    window.gameTest.inputsHandled++;
+    music.setMuted(!music.isMuted());
+    updateMusicBtn();
+  }
 
   var TYPES = [
     { name: "circle", color: "hsl(28, 92%, 60%)", side: -1 },
@@ -232,10 +245,12 @@
     overlay.classList.add("hidden");
     startBtn.blur();
     updateHud();
+    music.start();
   }
 
   function endRound() {
     state = "over";
+    music.stop();
     if (score > best) best = score;
     updateHud();
     overlayTitle.textContent = "Round over";
@@ -444,6 +459,7 @@
     var dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
     last = now;
     update(dt);
+    music.tick();
     draw();
     requestAnimationFrame(frame);
   }
@@ -456,6 +472,9 @@
     } else if (k === "ArrowRight" || k === "d" || k === "D") {
       e.preventDefault();
       sort(1);
+    } else if (k === "m" || k === "M") {
+      e.preventDefault();
+      toggleMusic();
     } else if ((k === "Enter" || k === " ") && state !== "play") {
       e.preventDefault();
       window.gameTest.inputsHandled++;
@@ -468,6 +487,8 @@
     window.gameTest.inputsHandled++;
     startRound();
   });
+
+  musicBtn.addEventListener("click", function () { toggleMusic(); musicBtn.blur(); });
 
   binLeft.addEventListener("click", function () { sort(-1); binLeft.blur(); });
   binRight.addEventListener("click", function () { sort(1); binRight.blur(); });
@@ -493,5 +514,6 @@
   window.addEventListener("resize", resize);
   resize();
   updateHud();
+  updateMusicBtn();
   requestAnimationFrame(frame);
 })();
