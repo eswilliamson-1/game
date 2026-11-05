@@ -97,6 +97,28 @@ test("the suggestions page lists every suggestion with its status", async () => 
   await shot(page, "suggestions");
 });
 
+test("every page says when a change is building", async () => {
+  for (const path of ["/?building", "/suggestions.html?building", "/rules.html?building"]) {
+    const { page, errors } = await open(path);
+    await page.waitForSelector("#build-status >> text=Building now: A tiny tower climber");
+    assert.deepEqual(errors, []);
+  }
+  const { page } = await open("/");
+  await page.waitForSelector("#ballot");
+  assert.equal(await page.locator("#build-status").isVisible(), false);
+});
+
+test("the banner updates by itself when a build finishes, without wiping a draft", async () => {
+  const page = await browser.newPage();
+  await page.clock.install();
+  await page.goto(`${URL}/?building=once`);
+  await page.waitForSelector("text=Building now");
+  await page.clock.fastForward(25_000);
+  await page.waitForSelector("#build-status >> text=The build has finished");
+  await page.clock.fastForward(25_000);
+  assert.equal(await page.locator("#build-status >> text=The build has finished").count(), 1);
+});
+
 test("patch notes show credit and past versions", async () => {
   const { page, errors } = await open("/patch-notes.html");
   await page.waitForSelector(".note");

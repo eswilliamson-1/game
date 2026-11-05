@@ -36,6 +36,24 @@ function showFailure(error) {
   notice.textContent = `Something went wrong: ${error.message}`;
 }
 
+const BUILD_CHECK_MS = 20_000;
+let wasBuilding = false;
+
+async function renderBuildStatus() {
+  const box = $("build-status");
+  const build = await api.building();
+  if (build) {
+    wasBuilding = true;
+    box.hidden = false;
+    box.textContent = `Building now: ${build.label}. If it passes its tests, it goes live in a few minutes.`;
+  } else if (wasBuilding) {
+    wasBuilding = false;
+    box.replaceChildren("The build has finished. ", el("a", { href: "patch-notes.html", textContent: "See the result" }), " or ", el("a", { href: location.href, textContent: "reload the game" }), ".");
+  } else if (!box.firstElementChild) {
+    box.hidden = true;
+  }
+}
+
 const guarded = (action) => () => action().then(refresh).catch(showFailure);
 
 async function renderAccount(user) {
@@ -411,6 +429,7 @@ const PAGES = { home: renderHome, notes: renderNotes, suggestions: renderSuggest
 async function refresh() {
   try {
     await renderAccount(await api.user());
+    await renderBuildStatus();
     await PAGES[document.body.dataset.page]?.();
     if (!api.preview) $("notice").hidden = true;
   } catch (error) {
@@ -425,3 +444,5 @@ if (api.preview) {
 }
 api.onAuthChange(refresh);
 refresh();
+// Only the banner updates on its own, so a suggestion being typed isn't wiped.
+setInterval(() => renderBuildStatus().catch(showFailure), BUILD_CHECK_MS);

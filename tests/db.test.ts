@@ -68,6 +68,7 @@ before(async () => {
   await db.exec(readFileSync("supabase/migrations/0005_username_accounts.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0006_login_names.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0007_public_record_timer.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0008_one_minute_pace.sql", "utf8"));
   await db.query(`insert into owners values ($1)`, [OWNER]);
 });
 
@@ -260,9 +261,9 @@ test("the pace is fast for a few players and slows as more become active", async
   };
   await db.query(`update settings set max_total_proposals_per_day = 100000`);
   try {
-    assert.equal(await minutes(), 5);
+    assert.equal(await minutes(), 1);
     await addPlayers(1, 5);
-    assert.equal(await minutes(), 5);
+    assert.equal(await minutes(), 1);
     await addPlayers(6, 6);
     assert.equal(await minutes(), 30);
     await addPlayers(7, 26);
@@ -272,7 +273,7 @@ test("the pace is fast for a few players and slows as more become active", async
 
     await db.exec("truncate proposals restart identity cascade");
     await addPlayers(1, 200, "8 days");
-    assert.equal(await minutes(), 5);
+    assert.equal(await minutes(), 1);
   } finally {
     await db.query(`update settings set max_total_proposals_per_day = 100`);
     await db.exec("truncate proposals restart identity cascade");
@@ -510,6 +511,6 @@ test("new suggestions are noticed quickly, but runs still can't pile up", async 
   const first = (await service("select tick() as t")).rows[0].t;
   assert.equal(first.plan, true);
   assert.equal((await service("select tick() as t")).rows[0].t.plan, false);
-  await db.query(`update settings set last_plan_dispatch_at = now() - interval '3 minutes'`);
+  await db.query(`update settings set last_plan_dispatch_at = now() - interval '2 minutes'`);
   assert.equal((await service("select tick() as t")).rows[0].t.plan, true);
 });

@@ -52,7 +52,7 @@ The repository, label, and branch protection are already set up at `eswilliamson
 
 1. In Supabase, add two secrets under Vault: `github_repo` (`owner/name`) and `github_dispatch_token` (the token from step 4).
 2. Enable the `pg_cron` and `pg_net` extensions.
-3. Run `supabase/migrations/0002_schedule.sql`, `supabase/migrations/0004_privacy_schedule.sql`, and `supabase/migrations/0007_public_record_timer.sql`, in that order, in the SQL editor.
+3. Run `supabase/migrations/0002_schedule.sql`, `supabase/migrations/0004_privacy_schedule.sql`, `supabase/migrations/0007_public_record_timer.sql`, and `supabase/migrations/0008_one_minute_pace.sql`, in that order, in the SQL editor.
 
 ## 7. Check before inviting anyone
 

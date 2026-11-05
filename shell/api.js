@@ -44,6 +44,11 @@ export function liveApi(url, key) {
       const results = must(await db.rpc("ballot_results", { p_ballot: ballot.id }));
       return { ...ballot, options, results };
     },
+    async building() {
+      const ballot = must(await db.from("ballots").select("winner_option_id").eq("status", "building").maybeSingle());
+      if (!ballot) return null;
+      return must(await db.from("options").select("label").eq("id", ballot.winner_option_id).single());
+    },
     async myVote(ballotId, userId) {
       const row = must(await db.from("votes").select("option_id").eq("ballot_id", ballotId).eq("user_id", userId).maybeSingle());
       return row?.option_id ?? null;
@@ -95,6 +100,7 @@ export function previewApi() {
     ],
   };
   let vote = null;
+  let buildChecks = 0;
   // Kept for the tab, so the preview stays joined between pages.
   let name = sessionStorage.getItem("preview-name") ?? "";
   let signedIn = Boolean(name);
@@ -119,6 +125,12 @@ export function previewApi() {
     isOwner: async () => signedIn,
     paused: async () => false,
     currentBallot: async () => ballot,
+    // Add ?building to the address to preview the banner, or ?building=once to see it finish.
+    async building() {
+      const value = new URLSearchParams(location.search).get("building");
+      if (value === null || buildChecks++ > 0 && value === "once") return null;
+      return { label: "A tiny tower climber" };
+    },
     myVote: async () => vote,
     vote: async (_, option) => {
       if (vote) ballot.results.find((r) => r.option_id === vote).votes--;
