@@ -257,6 +257,8 @@ jobs:
   # A failure here means the site isn't isolated. GitHub emails you when a run fails.
   verify-live:
     needs: deploy
+    # A skipped repair would otherwise skip this check too.
+    if: always() && needs.deploy.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
