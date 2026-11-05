@@ -9,7 +9,7 @@ import { serve } from "./serve.ts";
 
 // Same policy the live host sends, so the test sees what players will get.
 export const GAME_CSP =
-  "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; font-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'; sandbox allow-scripts allow-same-origin";
+  "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; font-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'; sandbox allow-scripts allow-same-origin allow-pointer-lock";
 
 const FPS_TOLERANCE = 0.9;
 const PORT = 4174;

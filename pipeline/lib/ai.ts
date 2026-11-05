@@ -95,7 +95,7 @@ Technical limits, enforced by an automated scan and a browser security policy. A
 - Plain JavaScript, HTML, and CSS, with no libraries and no build step. Allowed file types: ${settings.build.allowedExtensions.join(", ")}.
 - index.html loads scripts and styles from files in the game. No inline scripts, styles, or event handlers.
 - No network access of any kind, no external files or addresses, and no links.
-- No text inputs, forms, editable text, or browser dialogs. Buttons, canvas, keyboard, and pointer input are fine.
+- No text inputs, forms, editable text, or browser dialogs. Buttons, canvas, keyboard, and pointer input are fine, and so is requestPointerLock for mouse look.
 - No dynamic code, encoded strings, or raw HTML injection. Build DOM with createElement and textContent.
 - No Date or Intl. Use performance.now for timing, so behavior can't depend on the calendar.
 - Saves use localStorage only. Don't read anything about the player or their device.

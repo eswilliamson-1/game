@@ -22,7 +22,7 @@ test("the host config matches the configured hosts", () => {
 test("the policy blocks the network and keeps the sandbox", () => {
   assert.ok(policy.includes("connect-src 'none'"));
   assert.ok(policy.includes("default-src 'none'"));
-  assert.ok(policy.includes("sandbox allow-scripts allow-same-origin"));
+  assert.ok(policy.includes("sandbox allow-scripts allow-same-origin allow-pointer-lock"));
   assert.ok(!policy.join(" ").includes("unsafe"));
 });
 

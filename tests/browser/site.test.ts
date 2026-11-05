@@ -273,7 +273,7 @@ test("the rules page lists all 17 rules and is linked from every page", async ()
 test("the game runs in a sandboxed frame", async () => {
   const { page } = await open("/");
   const sandbox = await page.locator("iframe.game").getAttribute("sandbox");
-  assert.equal(sandbox, "allow-scripts allow-same-origin");
+  assert.equal(sandbox, "allow-scripts allow-same-origin allow-pointer-lock");
 });
 
 test("the review page needs a login, then shows the queue", async () => {
