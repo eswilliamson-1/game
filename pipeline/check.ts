@@ -91,6 +91,11 @@ async function testDevice(url: string, device: Device, seconds: number, result: 
       return route.abort();
     });
 
+    // Mouse capture needs a real player and a real screen, so the play test skips it.
+    await page.addInitScript(() => {
+      Element.prototype.requestPointerLock = () => Promise.resolve();
+    });
+
     const loadStart = Date.now();
     await page.goto(url);
     const ready = await page
