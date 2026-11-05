@@ -121,6 +121,13 @@ test("every page says when a change is building", async () => {
   assert.equal(await page.locator("#build-status").isVisible(), false);
 });
 
+test("during a build, the board says the round waits for it", async () => {
+  const { page, errors } = await open("/?building");
+  await page.waitForSelector("#ballot-time >> text=This round ends once the current build finishes");
+  await page.waitForSelector("#build-status >> text=Running for 12 min");
+  assert.deepEqual(errors, []);
+});
+
 test("the banner names the build stage", async () => {
   for (const [stage, words] of [["writing", "Step 1 of 3"], ["testing", "Step 2 of 3"], ["fixing", "trying to fix it"], ["publishing", "Step 3 of 3"]]) {
     const { page, errors } = await open(`/?building=${stage}`);

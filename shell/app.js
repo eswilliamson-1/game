@@ -33,12 +33,15 @@ function windowLabel(minutes) {
 }
 
 let closesAt = null;
+let buildRunning = false;
 
 function tickCountdown() {
   const box = $("ballot-time");
   if (!box || !closesAt) return;
   const seconds = Math.ceil((new Date(closesAt) - Date.now()) / 1000);
-  box.textContent = seconds > 0 ? `Round ends in ${clock(seconds)}` : "The round is ending now. The result appears within about a minute.";
+  // One build runs at a time, so a round can't end until the current one is done.
+  if (buildRunning) box.textContent = "Voting stays open. This round ends once the current build finishes.";
+  else box.textContent = seconds > 0 ? `Round ends in ${clock(seconds)}` : "The round is ending now. The result appears within about a minute.";
 }
 
 function showError(target, error) {
@@ -63,10 +66,12 @@ let wasBuilding = false;
 async function renderBuildStatus() {
   const box = $("build-status");
   const build = await api.building();
+  buildRunning = Boolean(build);
   if (build) {
     wasBuilding = true;
     box.hidden = false;
-    box.textContent = `Building now: ${build.label}. ${BUILD_STAGE[build.stage]}`;
+    const minutes = Math.max(0, Math.floor((Date.now() - new Date(build.startedAt)) / 60_000));
+    box.textContent = `Building now: ${build.label}. ${BUILD_STAGE[build.stage]} Running for ${minutes} min.`;
   } else if (wasBuilding) {
     wasBuilding = false;
     box.replaceChildren("The build has finished. ", el("a", { href: "patch-notes.html", textContent: "See the result" }), ".");

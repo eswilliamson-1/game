@@ -42,10 +42,10 @@ export function liveApi(url, key) {
       return hours * 60 + minutes;
     },
     async building() {
-      const ballot = must(await db.from("ballots").select("winner_option_id, build_stage").eq("status", "building").maybeSingle());
+      const ballot = must(await db.from("ballots").select("winner_option_id, build_stage, created_at").eq("status", "building").maybeSingle());
       if (!ballot) return null;
       const { label } = must(await db.from("options").select("label").eq("id", ballot.winner_option_id).single());
-      return { label, stage: ballot.build_stage };
+      return { label, stage: ballot.build_stage, startedAt: ballot.created_at };
     },
     upvote: async (idea) => must(await db.rpc("toggle_upvote", { p_idea: idea })),
     propose: async (body) => must(await db.rpc("submit_proposal", { p_body: body })),
@@ -113,7 +113,7 @@ export function previewApi() {
     async building() {
       const value = new URLSearchParams(location.search).get("building");
       if (value === null || buildChecks++ > 0 && value === "once") return null;
-      return { label: "A tiny tower climber", stage: value === "once" || value === "" ? "writing" : value };
+      return { label: "A tiny tower climber", stage: value === "once" || value === "" ? "writing" : value, startedAt: when(0.2) };
     },
     upvote: async (id) => {
       const idea = ideas.find((i) => i.id === id);
