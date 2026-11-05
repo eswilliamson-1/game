@@ -88,6 +88,7 @@ before(async () => {
   await db.exec(readFileSync("supabase/migrations/0016_major_scales_down.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0017_active_means_three_days.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0018_major_needs_a_third.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0019_more_daily_suggestions.sql", "utf8"));
   moved = (await db.query<{ title: string }>(`select title from ideas where not is_no_change`)).rows.map((r) => r.title);
 });
 
@@ -294,7 +295,7 @@ test("proposals with links, code, or hidden characters are refused", async () =>
 
 test("proposals are limited per person per day", async () => {
   await reset();
-  for (let i = 0; i < 3; i++) await user(ALICE, `select submit_proposal($1)`, [`Idea ${i}`]);
+  for (let i = 0; i < 10; i++) await user(ALICE, `select submit_proposal($1)`, [`Idea ${i}`]);
   await assert.rejects(user(ALICE, `select submit_proposal('One more')`));
   await user(BOB, `select submit_proposal('A different player')`);
 });
