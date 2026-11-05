@@ -84,6 +84,7 @@ before(async () => {
   await db.exec(readFileSync("supabase/migrations/0012_idea_sizes.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0013_safe_updates.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0014_timer_and_spending.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0015_medium_needs_one.sql", "utf8"));
   moved = (await db.query<{ title: string }>(`select title from ideas where not is_no_change`)).rows.map((r) => r.title);
 });
 
@@ -644,7 +645,7 @@ test("bigger ideas need more upvotes, scaled to active players", async () => {
   await reset();
   await release();
   const [s, m, l] = [await sized("S", "small"), await sized("M", "medium"), await sized("L", "major")];
-  assert.deepEqual([await need(s), await need(m), await need(l)], [1, 2, 3]);
+  assert.deepEqual([await need(s), await need(m), await need(l)], [1, 1, 3]);
   await db.exec(`insert into auth.users (id) select ('20000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid from generate_series(1, 20) n`);
   await db.exec(`insert into participation (round, user_id) select 1, id from auth.users where id::text like '20000000-%'`);
   assert.deepEqual([await need(s), await need(m), await need(l)], [1, 5, 10]);

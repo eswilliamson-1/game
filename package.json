@@ -12,6 +12,7 @@
     "attack-test": "node pipeline/attack-test.ts",
     "verify-live": "node pipeline/verify-live.ts",
     "setup:github": "node pipeline/setup-github.ts",
+    "security-check": "node pipeline/security-check.ts",
     "shell:build": "node pipeline/build-shell.ts",
     "shell:preview": "node pipeline/build-shell.ts && node pipeline/serve.ts dist/shell 4173",
     "shell:deploy": "node pipeline/build-shell.ts && node pipeline/deploy.ts --shell"
