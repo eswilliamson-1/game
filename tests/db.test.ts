@@ -67,6 +67,7 @@ before(async () => {
   await db.exec(readFileSync("supabase/migrations/0003_accounts_privacy.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0005_username_accounts.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0006_login_names.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0007_public_record_timer.sql", "utf8"));
   await db.query(`insert into owners values ($1)`, [OWNER]);
 });
 
@@ -238,19 +239,45 @@ test("planning is throttled, and not while a ballot waits", async () => {
   assert.equal((await service(`select tick() as r`)).rows[0].r.plan, false);
 });
 
-test('the cycle starts fast and slows down as releases accumulate', async () => {
+test("the pace is fast for a few players and slows as more become active", async () => {
   await reset();
   const minutes = async () => {
-    const { rows } = await service('select extract(epoch from cycle_interval()) / 60 as m');
+    const { rows } = await service("select extract(epoch from cycle_interval()) / 60 as m");
     return Number(rows[0].m);
   };
-  assert.equal(await minutes(), 30);
-  await db.exec("insert into changes (kind, title) select 'vote', 'x' from generate_series(1, 10)");
-  assert.equal(await minutes(), 120);
-  await db.exec("insert into changes (kind, title) select 'vote', 'x' from generate_series(1, 15)");
-  assert.equal(await minutes(), 360);
-  await db.exec("insert into changes (kind, title) select 'failed', 'x' from generate_series(1, 50)");
-  assert.equal(await minutes(), 360);
+  const addPlayers = async (from: number, to: number, age = "0 days") => {
+    await db.query(
+      `insert into auth.users (id) select ('10000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
+       from generate_series($1::int, $2::int) n on conflict do nothing`,
+      [from, to],
+    );
+    await db.query(
+      `insert into proposals (user_id, body, status, created_at)
+       select ('10000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid, 'x', 'rejected', now() - $3::interval
+       from generate_series($1::int, $2::int) n`,
+      [from, to, age],
+    );
+  };
+  await db.query(`update settings set max_total_proposals_per_day = 100000`);
+  try {
+    assert.equal(await minutes(), 5);
+    await addPlayers(1, 5);
+    assert.equal(await minutes(), 5);
+    await addPlayers(6, 6);
+    assert.equal(await minutes(), 30);
+    await addPlayers(7, 26);
+    assert.equal(await minutes(), 120);
+    await addPlayers(27, 101);
+    assert.equal(await minutes(), 360);
+
+    await db.exec("truncate proposals restart identity cascade");
+    await addPlayers(1, 200, "8 days");
+    assert.equal(await minutes(), 5);
+  } finally {
+    await db.query(`update settings set max_total_proposals_per_day = 100`);
+    await db.exec("truncate proposals restart identity cascade");
+    await db.exec(`delete from auth.users where id::text like '10000000-%'`);
+  }
 });
 
 async function buildProposal(uid: string) {
@@ -454,4 +481,35 @@ test("a data export includes the username", async () => {
   const { rows } = await user(ALICE, "select export_my_data() as data");
   assert.equal(rows[0].data.username, "alice_1");
   await db.query(`update auth.users set email = null where id = $1`, [ALICE]);
+});
+
+test("the public record shows suggestions at once, but never their text or a held reason", async () => {
+  await reset();
+  await user(ALICE, "select submit_proposal('Raw words that nobody has screened yet')");
+  const first = await as("anon", "", "select * from public_proposals");
+  assert.equal(first.rows.length, 1);
+  assert.equal(first.rows[0].status, "pending");
+  assert.equal(first.rows[0].title, null);
+  assert.equal(first.rows[0].credit, null);
+  assert.ok(!JSON.stringify(first.rows).includes("Raw words"));
+
+  await db.query(`update proposals set status = 'held', reason = 'Secret screening note'`);
+  const held = await as("anon", "", "select * from public_proposals");
+  assert.equal(held.rows[0].reason, null);
+
+  await setName(ALICE, "alice_1");
+  await db.query(`update proposals set status = 'queued', reason = null, title = 'A clean summary'`);
+  const passed = await as("anon", "", "select * from public_proposals");
+  assert.equal(passed.rows[0].title, "A clean summary");
+  assert.equal(passed.rows[0].credit, "alice_1");
+});
+
+test("new suggestions are noticed quickly, but runs still can't pile up", async () => {
+  await reset();
+  await user(ALICE, "select submit_proposal('First')");
+  const first = (await service("select tick() as t")).rows[0].t;
+  assert.equal(first.plan, true);
+  assert.equal((await service("select tick() as t")).rows[0].t.plan, false);
+  await db.query(`update settings set last_plan_dispatch_at = now() - interval '3 minutes'`);
+  assert.equal((await service("select tick() as t")).rows[0].t.plan, true);
 });

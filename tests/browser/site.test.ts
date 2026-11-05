@@ -87,6 +87,16 @@ test("a logged-in player suggests a change under their username", async () => {
   assert.deepEqual(errors, []);
 });
 
+test("the suggestions page lists every suggestion with its status", async () => {
+  const { page, errors } = await open("/suggestions.html");
+  await page.waitForSelector("text=being checked");
+  assert.equal(await page.locator("#suggestions .note").count(), 3);
+  assert.equal(await page.locator("text=by dragon_fan").count(), 1);
+  assert.equal(await page.locator("text=waiting for a ballot").count(), 1);
+  assert.deepEqual(errors, []);
+  await shot(page, "suggestions");
+});
+
 test("patch notes show credit and past versions", async () => {
   const { page, errors } = await open("/patch-notes.html");
   await page.waitForSelector(".note");
@@ -151,7 +161,7 @@ test("the rules page lists all 17 rules and is linked from every page", async ()
   const { page } = await open("/rules.html");
   assert.equal(await page.locator(".rules li").count(), 17);
   await shot(page, "rules");
-  for (const path of ["/", "/patch-notes.html", "/review.html", "/privacy.html"]) {
+  for (const path of ["/", "/suggestions.html", "/patch-notes.html", "/review.html", "/privacy.html"]) {
     const other = await open(path);
     assert.equal(await other.page.locator('nav a[href="rules.html"]').count(), 1);
     assert.equal(await other.page.locator('nav a[href="privacy.html"]').count(), 1);
@@ -175,7 +185,7 @@ test("the review page needs a login, then shows the queue", async () => {
 });
 
 test("no page scrolls sideways at phone width", async () => {
-  for (const path of ["/", "/patch-notes.html", "/rules.html", "/review.html", "/privacy.html"]) {
+  for (const path of ["/", "/suggestions.html", "/patch-notes.html", "/rules.html", "/review.html", "/privacy.html"]) {
     const { page } = await open(path, 375, 812);
     await page.waitForLoadState("networkidle");
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);

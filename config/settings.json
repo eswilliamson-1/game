@@ -9,7 +9,7 @@
   "model": "claude-opus-5-5",
   "proposal": { "maxChars": 280 },
   "build": {
-    "maxBuildsPerDay": 12,
+    "maxBuildsPerDay": 30,
     "maxFiles": 30,
     "allowedExtensions": [".html", ".js", ".css", ".svg", ".json"]
   },

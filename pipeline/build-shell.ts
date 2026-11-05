@@ -52,7 +52,7 @@ function privacyHtml(): string {
     <ul>
       <li><strong>Your username and password.</strong> The password is stored only as a secure hash, so nobody can read it. We don't ask for your email or your real name. Your username is public, so please don't use your real name.</li>
       <li><strong>Your votes</strong>, which are never shown next to your name or ID.</li>
-      <li><strong>Your suggestions.</strong> The owner can read them, and an AI turns them into a public summary.</li>
+      <li><strong>Your suggestions.</strong> The owner can read them. The public suggestions page lists when each one arrived and its status, and adds an AI-written summary and your username once it passes screening. Your original text is never public.</li>
       <li><strong>Public credit.</strong> Your username is shown when a suggestion of yours reaches a ballot or the patch notes, and on the leaderboard with your points and level.</li>
       <li><strong>Your points, level, and badges</strong>, worked out from the activity above.</li>
       <li><strong>Technical logs</strong>, including IP addresses, kept by our hosting and database providers for security.</li>
@@ -98,6 +98,11 @@ const PAGES: Record<string, { title: string; page: string; content: string }> = 
     title: "Patch notes",
     page: "notes",
     content: `<div class="narrow"><h1>Patch notes</h1><div id="notes"></div></div>`,
+  },
+  "suggestions.html": {
+    title: "Suggestions",
+    page: "suggestions",
+    content: `<div class="narrow"><h1>Suggestions</h1><p class="muted">Every suggestion is listed here as it comes in. The original text stays private, and a summary appears once it passes screening.</p><div id="suggestions"></div></div>`,
   },
   "rules.html": { title: "Rules", page: "rules", content: rulesHtml() },
   "privacy.html": { title: "Privacy", page: "privacy", content: privacyHtml() },

@@ -58,7 +58,7 @@ export function liveApi(url, key) {
       must(await db.rpc("delete_my_account"));
       await db.auth.signOut({ scope: "local" });
     },
-    recentProposals: async () => must(await db.from("public_proposals").select("*").order("id", { ascending: false }).limit(5)),
+    proposals: async (limit) => must(await db.from("public_proposals").select("*").order("id", { ascending: false }).limit(limit)),
     changes: async () => must(await db.from("changes").select("*").order("id", { ascending: false }).limit(200)),
     async reviewQueue() {
       const ballots = must(await db.from("ballots").select("*, options(*)").eq("status", "pending_review"));
@@ -137,9 +137,10 @@ export function previewApi() {
       leave();
       vote = null;
     },
-    recentProposals: async () => [
-      { id: 2, title: "Add a pet that follows you", status: "queued", reason: null },
-      { id: 1, title: null, status: "rejected", reason: "Rule 9: the game can't collect personal information." },
+    proposals: async () => [
+      { id: 3, title: null, status: "pending", reason: null, credit: null, created_at: when(0.1) },
+      { id: 2, title: "Add a pet that follows you", status: "queued", reason: null, credit: "dragon_fan", created_at: when(1) },
+      { id: 1, title: null, status: "rejected", reason: "Rule 9: the game can't collect personal information.", credit: null, created_at: when(3) },
     ],
     changes: async () => [
       { id: 3, kind: "vote", version: "v2", credit: "Dragon Fan", title: "A pet follows you", notes: "A small companion now trails the player.", created_at: when(2) },

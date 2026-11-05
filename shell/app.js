@@ -215,11 +215,30 @@ function leaderboardPanel(rows) {
   );
 }
 
+const PROPOSAL_STATUS = {
+  pending: "being checked",
+  held: "under review",
+  queued: "waiting for a ballot",
+  on_ballot: "on the ballot",
+  rejected: "rejected",
+};
+
+function proposalRow(p) {
+  return el(
+    "p",
+    {},
+    el("span", { textContent: p.title ?? "A suggestion" }),
+    el("span", { class: "tag", textContent: PROPOSAL_STATUS[p.status] }),
+    p.credit ? el("span", { class: "credit", textContent: ` by ${p.credit}` }) : null,
+    p.reason ? el("span", { class: "muted", textContent: ` ${p.reason}` }) : null,
+  );
+}
+
 async function renderHome() {
   const user = await api.user();
   const [ballot, proposals, paused, progress, board] = await Promise.all([
     api.currentBallot(),
-    api.recentProposals(),
+    api.proposals(5),
     api.paused(),
     user ? api.myProgress() : null,
     api.leaderboard(),
@@ -238,17 +257,19 @@ async function renderHome() {
       "section",
       { class: "panel" },
       el("h2", { textContent: "Recent suggestions" }),
-      ...proposals.map((p) =>
-        el(
-          "p",
-          {},
-          el("span", { textContent: p.title ?? "A suggestion" }),
-          el("span", { class: "tag", textContent: p.status.replace("_", " ") }),
-          p.reason ? el("span", { class: "muted", textContent: ` ${p.reason}` }) : null,
-        ),
-      ),
-      proposals.length ? null : el("p", { class: "muted", textContent: "None yet." }),
+      ...proposals.map(proposalRow),
+      proposals.length ? el("a", { href: "suggestions.html", textContent: "See all suggestions" }) : el("p", { class: "muted", textContent: "None yet." }),
     ),
+  );
+}
+
+async function renderSuggestions() {
+  const proposals = await api.proposals(200);
+  $("suggestions").replaceChildren(
+    ...proposals.map((p) =>
+      el("article", { class: "note" }, proposalRow(p), el("p", { class: "muted", textContent: new Date(p.created_at).toLocaleString() })),
+    ),
+    ...(proposals.length ? [] : [el("p", { class: "muted", textContent: "No suggestions yet." })]),
   );
 }
 
@@ -385,7 +406,7 @@ async function renderPrivacy() {
   );
 }
 
-const PAGES = { home: renderHome, notes: renderNotes, review: renderReview, privacy: renderPrivacy };
+const PAGES = { home: renderHome, notes: renderNotes, suggestions: renderSuggestions, review: renderReview, privacy: renderPrivacy };
 
 async function refresh() {
   try {
