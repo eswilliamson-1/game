@@ -1,4 +1,5 @@
 // Builds the voting site. Only the owner runs this, from their own computer.
+import { createHash } from "node:crypto";
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { build } from "esbuild";
 import settings from "../config/settings.json" with { type: "json" };
@@ -126,6 +127,12 @@ await build({
   },
 });
 
+// Hostinger's CDN keeps scripts and styles for a week, so each build needs new URLs.
+const version = createHash("sha256")
+  .update(readFileSync(`${OUT}/app.js`))
+  .update(readFileSync("shell/style.css"))
+  .digest("hex")
+  .slice(0, 12);
 const template = readFileSync("shell/page.html", "utf8");
 for (const [file, page] of Object.entries(PAGES)) {
   writeFileSync(
@@ -134,6 +141,7 @@ for (const [file, page] of Object.entries(PAGES)) {
       .replaceAll("{{title}}", () => escapeHtml(page.title))
       .replaceAll("{{siteName}}", () => escapeHtml(settings.siteName))
       .replaceAll("{{page}}", () => page.page)
+      .replaceAll("{{version}}", () => version)
       .replaceAll("{{content}}", () => page.content),
   );
 }

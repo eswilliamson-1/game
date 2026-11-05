@@ -35,3 +35,7 @@ test("a missing or weakened live policy is detected", () => {
 test("the live policy passes even with Hostinger's extra header merged in", () => {
   assert.equal(checkPolicy("x", `upgrade-insecure-requests, ${policy.join("; ")}`, policy).ok, true);
 });
+
+test("the live game is never served from a stale cache", () => {
+  assert.ok(htaccess.includes('Cache-Control "no-cache"'));
+});
