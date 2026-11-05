@@ -1,15 +1,36 @@
 <!doctype html>
-<html lang="en" data-placeholder>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Waiting for the first vote</title>
-  <link rel="stylesheet" href="placeholder.css">
+  <title>Signal Sorter</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main>
-    <h1>Nothing here yet</h1>
-    <p>This game doesn't exist until you vote for it.</p>
+  <main id="app">
+    <header>
+      <h1>Signal Sorter</h1>
+      <p id="goal">Sort each shape into its matching bin.</p>
+      <div id="hud">
+        <span>Score <b id="score">0</b></span>
+        <span>Best <b id="best">0</b></span>
+        <span>Mistakes <b id="miss">0</b> / 3</span>
+      </div>
+    </header>
+    <div id="stage">
+      <canvas id="board"></canvas>
+      <div id="overlay">
+        <p id="overlayTitle">Ready?</p>
+        <p id="overlayText">Circles go left. Squares go right.</p>
+        <button id="startBtn" type="button">Start</button>
+      </div>
+    </div>
+    <div id="bins">
+      <button id="binLeft" class="bin left" type="button">Left bin: Circles</button>
+      <button id="binRight" class="bin right" type="button">Right bin: Squares</button>
+    </div>
+    <p class="hint">Use the Left / Right arrow keys, tap a bin, or swipe the shape.</p>
   </main>
+  <script src="game.js"></script>
 </body>
 </html>
