@@ -20,6 +20,12 @@ const VARIABLES = [
   ["SUPABASE_ANON_KEY", "Supabase public anon key"],
 ];
 
+// These prompts show what's pasted, so a password left on the clipboard must not be saved.
+const FORMATS: Record<string, RegExp> = {
+  SUPABASE_URL: /^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/,
+  SUPABASE_ANON_KEY: /^(sb_publishable_|eyJ)[\w.-]+$/,
+};
+
 const names = (kind: string) =>
   spawnSync(GH, [kind, "list", "--json", "name", "--jq", ".[].name"], { encoding: "utf8" }).stdout.split(/\r?\n/);
 
@@ -36,7 +42,8 @@ const variables = names("variable");
 const input = createInterface({ input: process.stdin, output: process.stdout });
 for (const [name, label] of VARIABLES) {
   if (variables.includes(name)) continue;
-  const value = (await input.question(`\n${label} (this one is public): `)).trim();
+  const value = (await input.question(`\n${label} (this one is public, and shows as you paste): `)).trim();
+  if (!FORMATS[name].test(value)) throw new Error(`That doesn't look like the ${label}, so it wasn't saved. Run this again.`);
   if (spawnSync(GH, ["variable", "set", name, "--body", value], { stdio: "inherit" }).status !== 0) {
     throw new Error(`${name} wasn't saved. Run this again to continue from here.`);
   }
