@@ -3,7 +3,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import settings from "../config/settings.json" with { type: "json" };
-import { createAI, NoAnswer, type AI } from "./lib/ai.ts";
+import { createAI, NoAnswer, usage, type AI } from "./lib/ai.ts";
 import { describeGame, readGame, writeGame } from "./lib/files.ts";
 import { safeGamePath, scanFiles, Spec, validateSpec, type GameFile } from "./lib/safety.ts";
 
@@ -97,6 +97,7 @@ async function main() {
   }
   writeGame(`${OUT}/game`, files);
   writeFileSync(`${OUT}/outcome.json`, JSON.stringify(outcome, null, 2));
+  writeFileSync(`${OUT}/usage.json`, JSON.stringify(usage));
   console.log(outcome.ok ? "Candidate ready." : `Candidate failed: ${outcome.reason}`);
 }
 

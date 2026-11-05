@@ -72,6 +72,16 @@ test("the board shows each idea's size and upvote target", async () => {
   assert.deepEqual(errors, []);
 });
 
+test("the owner can enter their balance and see an estimate of what's left", async () => {
+  const { page, errors } = await open("/review.html");
+  await logIn(page);
+  await page.waitForSelector("#spending >> text=Enter your balance");
+  await page.fill("#credit", "50");
+  await page.click("text=Update my balance");
+  await page.waitForSelector("#spending >> text=About $48.75 left");
+  assert.deepEqual(errors, []);
+});
+
 test("the owner can change an idea's size", async () => {
   const { page, errors } = await open("/review.html");
   await logIn(page);

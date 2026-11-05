@@ -117,6 +117,9 @@ function filesToText(files: GameFile[]): string {
   return JSON.stringify(files.map((f) => ({ path: f.path, content: f.content })));
 }
 
+/** Tokens used so far in this run, for the owner's spending estimate. */
+export const usage = { input: 0, output: 0 };
+
 export function createAI(client = new Anthropic()): AI {
   async function ask<T extends z.ZodType>(
     schema: T,
@@ -140,6 +143,8 @@ export function createAI(client = new Anthropic()): AI {
       if (error instanceof AnthropicError && !(error instanceof APIError)) throw new NoAnswer(error.message);
       throw error;
     }
+    usage.input += message.usage.input_tokens;
+    usage.output += message.usage.output_tokens;
     if (message.stop_reason !== "end_turn") throw new NoAnswer(`Stopped: ${message.stop_reason}`);
     const text = message.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
     let json: unknown;

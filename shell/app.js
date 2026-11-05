@@ -41,7 +41,7 @@ function tickCountdown() {
   const seconds = Math.ceil((new Date(closesAt) - Date.now()) / 1000);
   // One build runs at a time, so a round can't end until the current one is done.
   if (buildRunning) box.textContent = "Voting stays open. This round ends once the current build finishes.";
-  else box.textContent = seconds > 0 ? `Round ends in ${clock(seconds)}` : "The round is ending now. The result appears within about a minute.";
+  else box.textContent = seconds > 0 ? `Round ends in ${clock(seconds)}` : "The round is ending now. The result appears in a few seconds.";
 }
 
 function showError(target, error) {
@@ -405,10 +405,22 @@ async function renderReview() {
 
   const { ideas, proposals } = await api.reviewQueue();
   const onBoard = (await api.board()).filter((idea) => !idea.is_no_change);
+  const spending = await api.spending();
+  const money = (value) => `$${Number(value).toFixed(2)}`;
+  const credit = el("input", { id: "credit", type: "number", min: "0", step: "0.01", placeholder: "Your balance in dollars" });
   const paused = await api.paused();
   const pauseReason = el("input", { placeholder: "Public reason" });
   const nameToClear = el("input", { placeholder: "Exact name to remove" });
   box.replaceChildren(
+    el("h2", { textContent: "AI credits" }),
+    el(
+      "section",
+      { class: "panel", id: "spending" },
+      el("p", { textContent: spending.left === null ? "Enter your balance below to see an estimate of what's left." : `About ${money(spending.left)} left` }),
+      el("p", { class: "muted", textContent: `Spent about ${money(spending.today)} in the last 24 hours and ${money(spending.month)} this month. This is an estimate that only counts game planning and builds, so check the Claude Console for your exact balance.` }),
+      credit,
+      el("div", { class: "row" }, el("button", { class: "secondary", textContent: "Update my balance", onclick: guarded(() => api.setCredit(Number(credit.value))) }), el("a", { href: "https://platform.claude.com/settings/billing", target: "_blank", rel: "noreferrer", textContent: "Open Claude Console billing" })),
+    ),
     el("h2", { textContent: "Ideas waiting for approval" }),
     ...ideas.map((idea) =>
       el(

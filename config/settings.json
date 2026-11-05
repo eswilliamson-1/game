@@ -7,6 +7,7 @@
   "mustBeBlocked": ["https://ewpages.com/sandbox/", "https://ewpages.com/vote/"],
   "privacy": { "owner": "ewpages", "contact": "eswxbox@gmail.com", "dataRegion": "the United States", "updated": "2026-11-04" },
   "model": "claude-opus-5-5",
+  "aiPrice": { "inputPerMillion": 4, "outputPerMillion": 20 },
   "proposal": { "maxChars": 280 },
   "build": {
     "maxBuildsPerDay": 30,

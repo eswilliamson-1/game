@@ -83,6 +83,7 @@ before(async () => {
   await db.exec(readFileSync("supabase/migrations/0011_fresh_ai_ideas.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0012_idea_sizes.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0013_safe_updates.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0014_timer_and_spending.sql", "utf8"));
   moved = (await db.query<{ title: string }>(`select title from ideas where not is_no_change`)).rows.map((r) => r.title);
 });
 
@@ -711,4 +712,17 @@ test("the winner stays on the board until the build ends, and can't be voted on"
   await assert.rejects(up(BOB, id));
   await service(`select complete_build($1, true, 'v1', 'Winner', 'Done')`, [build[0]]);
   assert.deepEqual(await shown(), []);
+});
+
+test("the owner sees spending and what's left, and nobody else can", async () => {
+  await db.exec(`delete from ai_spend`);
+  await user(OWNER, "select set_ai_credit(50)");
+  await db.exec(`insert into ai_spend (job, input_tokens, output_tokens, dollars) values ('plan', 1000, 1000, 2.5)`);
+  const { rows } = await user(OWNER, "select spending_summary() as s");
+  assert.equal(Number(rows[0].s.left), 47.5);
+  assert.equal(Number(rows[0].s.today), 2.5);
+  await assert.rejects(user(ALICE, "select spending_summary()"));
+  await assert.rejects(user(ALICE, "select set_ai_credit(1)"));
+  await assert.rejects(user(ALICE, "select * from ai_spend"));
+  await assert.rejects(user(OWNER, "select set_ai_credit(-1)"));
 });

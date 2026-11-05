@@ -1,9 +1,10 @@
 // Runs in GitHub Actions with the Claude and Supabase keys. Never runs generated code.
 import { createClient } from "@supabase/supabase-js";
 import settings from "../config/settings.json" with { type: "json" };
-import { createAI } from "./lib/ai.ts";
+import { createAI, usage } from "./lib/ai.ts";
 import { describeGame, readGame } from "./lib/files.ts";
 import { runPlan, type Proposal, type Store } from "./lib/plan.ts";
+import { recordSpend } from "./lib/spend.ts";
 
 const db = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
 
@@ -91,4 +92,6 @@ try {
   await db.from("settings").update({ last_plan_dispatch_at: retryAt }).eq("id", true);
   await notifyOwner("Planning failed and will retry in 6 hours. Check the latest Plan workflow run.");
   throw error;
+} finally {
+  await recordSpend(db, "plan", usage);
 }

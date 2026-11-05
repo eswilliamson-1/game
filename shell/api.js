@@ -66,6 +66,8 @@ export function liveApi(url, key) {
     },
     reviewIdea: async (id, approve, reason) => must(await db.rpc("review_idea", { p_idea: id, p_approve: approve, p_reason: reason })),
     setIdeaSize: async (id, size) => must(await db.rpc("set_idea_size", { p_idea: id, p_size: size })),
+    spending: async () => must(await db.rpc("spending_summary")),
+    setCredit: async (dollars) => must(await db.rpc("set_ai_credit", { p_dollars: dollars })),
     reviewProposal: async (id, approve, reason) => must(await db.rpc("review_proposal", { p_proposal: id, p_approve: approve, p_reason: reason })),
     setPaused: async (paused, reason) => must(await db.rpc("set_paused", { p_paused: paused, p_reason: reason })),
     clearName: async (name) => must(await db.rpc("clear_display_name", { p_name: name })),
@@ -83,6 +85,7 @@ export function previewApi() {
     { id: 4, title: "Change nothing this round", summary: null, credit: "the rules", size: "small", need: 1, votes: 0, is_no_change: true, mine: false },
   ];
   let voted = false;
+  let credit = null;
   let buildChecks = 0;
   // Kept for the tab, so the preview stays joined between pages.
   let name = sessionStorage.getItem("preview-name") ?? "";
@@ -155,6 +158,10 @@ export function previewApi() {
     reviewIdea: async () => {},
     setIdeaSize: async (id, size) => {
       ideas.find((i) => i.id === id).size = size;
+    },
+    spending: async () => ({ today: 1.25, month: 8.4, credit_set: credit, left: credit === null ? null : credit - 1.25 }),
+    setCredit: async (dollars) => {
+      credit = dollars;
     },
     reviewProposal: async () => {},
     setPaused: async () => {},

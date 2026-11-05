@@ -293,6 +293,12 @@ jobs:
         with:
           name: ${{ env.CANDIDATE }}
           path: .candidate
+      - uses: actions/download-artifact@v4
+        if: env.CANDIDATE == 'candidate-2'
+        continue-on-error: true
+        with:
+          name: candidate-1
+          path: .candidate-first
       - run: node pipeline/report.ts
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}

@@ -5,6 +5,7 @@ import { createAI, NoAnswer, type AI, type ScreenResult } from "../pipeline/lib/
 import { runPlan, type Proposal, type Store } from "../pipeline/lib/plan.ts";
 import { buildCandidate, stillFits } from "../pipeline/build.ts";
 import type { Spec } from "../pipeline/lib/safety.ts";
+import { dollars } from "../pipeline/lib/spend.ts";
 
 const SPEC: Spec = {
   title: "Add a pet dragon",
@@ -205,4 +206,8 @@ test("a build with hidden extra behavior is blocked by the comparison", async ()
     compare: async () => ({ matches_spec: false, reason: "It adds a secret screen." }),
   });
   assert.match((await buildCandidate(ai, SPEC, CURRENT)).outcome.reason, /secret screen/);
+});
+
+test("spending is estimated from tokens at the configured price", () => {
+  assert.equal(dollars({ input: 1_000_000, output: 100_000 }), 6);
 });

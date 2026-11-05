@@ -1,11 +1,21 @@
 // Records the result publicly. Holds the Supabase service key, never runs generated code.
 import { existsSync, readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
+import { recordSpend, type Usage } from "./lib/spend.ts";
 
 const db = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
 const outcome = existsSync(".candidate/outcome.json")
   ? JSON.parse(readFileSync(".candidate/outcome.json", "utf8"))
   : { title: "Change not built", notes: "" };
+// A repaired build has a second candidate, so both attempts count.
+const used = [".candidate/usage.json", ".candidate-first/usage.json"]
+  .filter((file) => existsSync(file))
+  .map((file) => JSON.parse(readFileSync(file, "utf8")) as Usage);
+await recordSpend(db, "build", {
+  input: used.reduce((sum, u) => sum + u.input, 0),
+  output: used.reduce((sum, u) => sum + u.output, 0),
+});
+
 const failure = existsSync("failure.txt") ? readFileSync("failure.txt", "utf8").trim() : "";
 const released = process.env.RELEASED === "true";
 const version = process.env.VERSION || null;
