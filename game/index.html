@@ -21,6 +21,7 @@
     </header>
     <div id="stage">
       <canvas id="board"></canvas>
+      <div id="lockHint" class="hidden">Press Esc to free your cursor</div>
       <div id="overlay">
         <p id="overlayTitle">Ready?</p>
         <p id="overlayText">Circles go in the left bin, triangles in the middle, squares on the right. Gold-edged shapes are worth 3 points. Every 10 correct sorts in a row earns a +2 streak bonus. You are the sorter bot on the factory floor: walk around and turn the camera to look in any direction.</p>
@@ -32,7 +33,7 @@
       <button id="binMid" class="bin mid" type="button">Triangles</button>
       <button id="binRight" class="bin right" type="button">Squares</button>
     </div>
-    <p class="hint">Sort: tap a bin button or press J / K / L (or 1 / 2 / 3). Walk: WASD or arrow keys, or drag on the left half of the view. Turn camera: Q / E or drag the view. M toggles music.</p>
+    <p class="hint">Sort: tap a bin button or press J / K / L (or 1 / 2 / 3). Walk: WASD or arrow keys, or drag on the left half of the view. Turn camera: Q / E, drag the view, or click the view on desktop for mouse look (Esc frees the cursor). M toggles music.</p>
   </main>
   <script src="music.js"></script>
   <script src="game.js"></script>

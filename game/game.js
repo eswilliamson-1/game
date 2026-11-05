@@ -22,6 +22,7 @@
   var binMid = document.getElementById("binMid");
   var binRight = document.getElementById("binRight");
   var musicBtn = document.getElementById("musicBtn");
+  var lockHint = document.getElementById("lockHint");
 
   goalEl.textContent = GOAL;
 
@@ -56,6 +57,7 @@
   var ARENA = { x0: -15, x1: 15, z0: -11, z1: 23 };
   var START_X = 0, START_Z = -2;
   var PLAYER_R = 0.45, MOVE_SPEED = 5, TURN_SPEED = 2.2, DRAG_TURN = 0.0085;
+  var MOUSE_TURN = 0.0026, MOUSE_MAX_STEP = 250;
   var CAM_BACK = 5.5, CAM_UP = 4.2, LOOK_AHEAD = 4, LOOK_Y = 0.5;
   var CAM_PITCH = Math.atan2(CAM_UP - LOOK_Y, CAM_BACK + LOOK_AHEAD);
   var NEAR = 0.2;
@@ -78,6 +80,7 @@
   var cam = { x: 0, y: 0, z: 0, ct: 1, st: 0, cp: 1, sp: 0, f: 300, cx: 150, cy: 200 };
   var keys = {};
   var stick = null, stickId = null, lookers = {};
+  var locked = false;
 
   var state = "ready";
   var score = 0, best = 0, miss = 0;
@@ -264,6 +267,58 @@
     if (streakEl) streakEl.textContent = String(streak);
   }
 
+  // ---- pointer lock (desktop mouse look) ----
+  function lockSupported() {
+    return typeof canvas.requestPointerLock === "function" && ("pointerLockElement" in document);
+  }
+
+  function isLocked() {
+    return lockSupported() && document.pointerLockElement === canvas;
+  }
+
+  function requestLock() {
+    if (!lockSupported() || isLocked()) return;
+    try {
+      var p = canvas.requestPointerLock();
+      if (p && typeof p.catch === "function") p.catch(function () { /* refused: drag-to-turn still works */ });
+    } catch (err) { /* refused: drag-to-turn still works */ }
+  }
+
+  function releaseLock() {
+    if (isLocked() && typeof document.exitPointerLock === "function") {
+      try { document.exitPointerLock(); } catch (err) { /* ignore */ }
+    }
+  }
+
+  function onLockChange() {
+    locked = isLocked();
+    if (lockHint) {
+      if (locked) lockHint.classList.remove("hidden");
+      else lockHint.classList.add("hidden");
+    }
+    if (locked) {
+      lookers = {};
+      if (state !== "play") releaseLock();
+    }
+  }
+
+  document.addEventListener("pointerlockchange", onLockChange);
+  document.addEventListener("pointerlockerror", function () {
+    locked = false;
+    if (lockHint) lockHint.classList.add("hidden");
+  });
+
+  document.addEventListener("mousemove", function (e) {
+    if (!locked || state !== "play") return;
+    var mx = e.movementX || 0;
+    if (mx > MOUSE_MAX_STEP) mx = MOUSE_MAX_STEP;
+    else if (mx < -MOUSE_MAX_STEP) mx = -MOUSE_MAX_STEP;
+    if (mx !== 0) {
+      camYaw += mx * MOUSE_TURN;
+      window.gameTest.inputsHandled++;
+    }
+  });
+
   function spawn() {
     var n = TYPES.length;
     var t = Math.floor(Math.random() * n);
@@ -298,6 +353,7 @@
 
   function endRound() {
     state = "over";
+    releaseLock();
     music.stop();
     streakT = 0;
     if (score > best) best = score;
@@ -867,12 +923,13 @@
     e.preventDefault();
     var r = canvas.getBoundingClientRect();
     var lx = e.clientX - r.left, ly = e.clientY - r.top;
-    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
     window.gameTest.inputsHandled++;
+    if (e.pointerType === "mouse" && state === "play" && !locked) requestLock();
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
     if (e.pointerType !== "mouse" && lx < r.width / 2 && stickId === null) {
       stickId = e.pointerId;
       stick = { ox: lx, oy: ly, dx: 0, dy: 0 };
-    } else {
+    } else if (!locked) {
       lookers[e.pointerId] = { x: e.clientX };
     }
   });
@@ -883,6 +940,7 @@
       setStick(e.clientX - r.left, e.clientY - r.top);
       return;
     }
+    if (locked) return;
     var l = lookers[e.pointerId];
     if (l) {
       camYaw += (e.clientX - l.x) * DRAG_TURN;

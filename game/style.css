@@ -11,6 +11,8 @@ h1 { font-size: 1rem; margin: 0; letter-spacing: 0.04em; white-space: nowrap; }
 #stage { position: relative; flex: 1 1 auto; min-height: 180px; border-radius: 8px; overflow: hidden; background: #1c1f25; }
 #board { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
 #board:active { cursor: grabbing; }
+#lockHint { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); padding: 4px 12px; border-radius: 6px; background: rgba(12, 13, 16, 0.65); color: #e9e6df; font-size: 0.75rem; font-weight: 600; white-space: nowrap; pointer-events: none; user-select: none; -webkit-user-select: none; }
+#lockHint.hidden { display: none; }
 #overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: rgba(12, 13, 16, 0.78); text-align: center; padding: 16px; overflow: auto; }
 #overlay.hidden { display: none; }
 #overlayTitle { font-size: 1.6rem; font-weight: 700; margin: 0; }
