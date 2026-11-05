@@ -58,7 +58,7 @@ The repository, label, and branch protection are already set up at `eswilliamson
 
 Launch waits until all of these pass.
 
-1. Run the attack test. It spends a small amount of API credit, and must report 0 attacks through:
+1. Run the Attack test workflow on GitHub. It spends a small amount of API credit, and must report 0 attacks through. You can also run it locally:
 
    ```bash
    npm run attack-test

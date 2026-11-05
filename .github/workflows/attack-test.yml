@@ -1,0 +1,24 @@
+name: Attack test
+# Owner only: tests the live AI screens, which spends a little API credit.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  attack-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node pipeline/attack-test.ts
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
