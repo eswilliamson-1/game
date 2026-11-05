@@ -38,7 +38,7 @@ function tickCountdown() {
   const box = $("ballot-time");
   if (!box || !closesAt) return;
   const seconds = Math.ceil((new Date(closesAt) - Date.now()) / 1000);
-  box.textContent = seconds > 0 ? `Voting closes in ${clock(seconds)}` : "Voting is closing now. The result appears within about a minute.";
+  box.textContent = seconds > 0 ? `Round ends in ${clock(seconds)}` : "The round is ending now. The result appears within about a minute.";
 }
 
 function showError(target, error) {
@@ -126,24 +126,23 @@ function accountForm() {
   return form;
 }
 
-function ballotPanel(ballot, user, mine, windowMinutes) {
-  const total = ballot.results.reduce((n, r) => n + Number(r.votes), 0);
-  const canVote = user && ballot.status === "open";
+function boardPanel(ideas, round, user, windowMinutes) {
+  const top = Math.max(1, ...ideas.map((idea) => Number(idea.votes)));
   const status = el("div");
-  const options = ballot.options.map((option) => {
-    const votes = Number(ballot.results.find((r) => r.option_id === option.id)?.votes ?? 0);
-    const share = total ? Math.round((votes / total) * 100) : 0;
+  closesAt = round.round_closes_at;
+  const buttons = ideas.map((idea) => {
+    const votes = Number(idea.votes);
     const bar = el("span", { class: "bar" });
-    bar.style.width = `${share}%`;
+    bar.style.width = `${Math.round((votes / top) * 100)}%`;
     return el(
       "button",
       {
         class: "option",
-        disabled: !canVote,
-        "aria-pressed": String(mine === option.id),
+        disabled: !user,
+        "aria-pressed": String(idea.mine),
         onclick: async () => {
           try {
-            await api.vote(ballot.id, option.id);
+            await api.upvote(idea.id);
             await updateHome();
           } catch (error) {
             showError(status, error);
@@ -151,24 +150,21 @@ function ballotPanel(ballot, user, mine, windowMinutes) {
         },
       },
       bar,
-      el("span", { class: "label" }, el("span", { textContent: option.label }), el("span", { textContent: String(votes) })),
-      option.spec?.summary ? el("span", { class: "detail", textContent: option.spec.summary }) : null,
+      el("span", { class: "label" }, el("span", { textContent: idea.title }), el("span", { textContent: `${idea.mine ? "▲ " : ""}${votes}` })),
+      idea.summary ? el("span", { class: "detail", textContent: idea.summary }) : null,
+      idea.is_no_change ? null : el("span", { class: "detail", textContent: `Suggested by ${idea.credit}` }),
     );
   });
-  closesAt = ballot.status === "open" && total > 0 ? ballot.closes_at : null;
-  const state =
-    ballot.status === "building"
-      ? el("p", { class: "muted", textContent: "Voting has closed. The winning change is being built." })
-      : closesAt
-        ? el("p", { class: "countdown", id: "ballot-time" })
-        : el("p", { class: "muted", textContent: `No votes yet, so the clock hasn't started. Once someone votes, voting closes within ${windowLabel(windowMinutes)}.` });
   return el(
     "section",
-    { class: "panel", id: "ballot" },
-    el("h2", { textContent: ballot.question }),
-    el("p", { class: "credit", textContent: `Suggested by ${ballot.credit}` }),
-    ...options,
-    state,
+    { class: "panel", id: "board" },
+    el("h2", { textContent: `Idea board · Round ${round.round_number}` }),
+    el("p", { class: "muted", textContent: "Upvote as many ideas as you like. When the round ends, the top idea gets built, and a tie changes nothing." }),
+    ...buttons,
+    closesAt
+      ? el("p", { class: "countdown", id: "ballot-time" })
+      : el("p", { class: "muted", textContent: `No votes this round, so the clock hasn't started. Once someone votes, the round ends within ${windowLabel(windowMinutes)}.` }),
+    round.last_round_result ? el("p", { class: "muted", textContent: round.last_round_result }) : null,
     status,
   );
 }
@@ -189,7 +185,7 @@ function proposalPanel(user) {
               try {
                 await api.propose(body.value);
                 body.value = "";
-                status.replaceChildren(el("p", { class: "success", textContent: "Thanks. It will be checked against the rules before it reaches a ballot." }));
+                status.replaceChildren(el("p", { class: "success", textContent: "Thanks. It will be checked against the rules before it reaches the board." }));
               } catch (error) {
                 showError(status, error);
               }
@@ -218,7 +214,7 @@ const BADGES = [
   { name: "First vote", earned: (p) => p.votes >= 1 },
   { name: "10 votes", earned: (p) => p.votes >= 10 },
   { name: "5 in a row", earned: (p) => p.streak >= 5 },
-  { name: "On the ballot", earned: (p) => p.on_ballot >= 1 },
+  { name: "On the board", earned: (p) => p.on_ballot >= 1 },
   { name: "Built by you", earned: (p) => p.built >= 1 },
 ];
 
@@ -236,7 +232,7 @@ function progressPanel(progress) {
     el("p", { class: "muted", textContent: next ? `${next.at - progress.points} points to ${next.name}` : "You've reached the top level." }),
     progress.streak > 1 ? el("p", { textContent: `Voting streak: ${progress.streak} in a row` }) : null,
     badges.length ? el("p", {}, ...badges.map((badge) => el("span", { class: "tag badge", textContent: badge.name }))) : null,
-    el("p", { class: "muted", textContent: "1 point for voting, 5 when your idea reaches a ballot, 20 when it's built. Which option you pick never affects your points." }),
+    el("p", { class: "muted", textContent: "1 point for each round you vote in, 5 when your idea reaches the board, 20 when it's built. Which ideas you pick never affects your points." }),
   );
 }
 
@@ -254,8 +250,8 @@ function leaderboardPanel(rows) {
 const PROPOSAL_STATUS = {
   pending: "being checked",
   held: "under review",
-  queued: "waiting for a ballot",
-  on_ballot: "on the ballot",
+  queued: "being checked",
+  on_ballot: "on the board",
   rejected: "rejected",
 };
 
@@ -270,14 +266,9 @@ function proposalRow(p) {
   );
 }
 
-async function ballotSection(user) {
-  const [ballot, windowMinutes] = await Promise.all([api.currentBallot(), api.windowMinutes()]);
-  if (!ballot) {
-    closesAt = null;
-    return el("section", { class: "panel", id: "ballot" }, el("h2", { textContent: "Current vote" }), el("p", { class: "muted", textContent: "The next vote will appear here soon." }));
-  }
-  const mine = user ? await api.myVote(ballot.id, user.id) : null;
-  return ballotPanel(ballot, user, mine, windowMinutes);
+async function boardSection(user) {
+  const [ideas, round, windowMinutes] = await Promise.all([api.board(), api.round(), api.windowMinutes()]);
+  return boardPanel(ideas, round, user, windowMinutes);
 }
 
 function recentPanel(proposals) {
@@ -294,12 +285,12 @@ function recentPanel(proposals) {
 async function updateHome() {
   const user = await api.user();
   const [section, proposals, progress, board] = await Promise.all([
-    ballotSection(user),
+    boardSection(user),
     api.proposals(5),
     user ? api.myProgress() : null,
     api.leaderboard(),
   ]);
-  $("ballot").replaceWith(section);
+  $("board").replaceWith(section);
   $("recent").replaceWith(recentPanel(proposals));
   $("leaderboard").replaceWith(leaderboardPanel(board));
   if (progress) $("progress").replaceWith(progressPanel(progress));
@@ -309,7 +300,7 @@ async function updateHome() {
 async function renderHome() {
   const user = await api.user();
   const [section, proposals, paused, progress, board] = await Promise.all([
-    ballotSection(user),
+    boardSection(user),
     api.proposals(5),
     api.paused(),
     user ? api.myProgress() : null,
@@ -392,23 +383,23 @@ async function renderReview() {
   if (!user) return box.replaceChildren(el("section", { class: "panel" }, accountForm()));
   if (!(await api.isOwner())) return box.replaceChildren(el("p", { textContent: "Only the site owner can use this page." }));
 
-  const { ballots, proposals } = await api.reviewQueue();
+  const { ideas, proposals } = await api.reviewQueue();
   const paused = await api.paused();
   const pauseReason = el("input", { placeholder: "Public reason" });
   const nameToClear = el("input", { placeholder: "Exact name to remove" });
   box.replaceChildren(
-    el("h2", { textContent: "Ballots waiting for approval" }),
-    ...ballots.map((b) =>
+    el("h2", { textContent: "Ideas waiting for approval" }),
+    ...ideas.map((idea) =>
       el(
         "section",
         { class: "panel" },
-        el("h3", { textContent: b.question }),
-        el("p", { class: "credit", textContent: `Suggested by ${b.credit}` }),
-        ...b.options.filter((o) => !o.is_no_change).map((o) => el("p", { textContent: `${o.label}: ${o.spec?.summary ?? ""}` })),
-        reviewButtons((approve, reason) => api.reviewBallot(b.id, approve, reason)),
+        el("h3", { textContent: idea.title }),
+        el("p", { class: "credit", textContent: `Suggested by ${idea.credit}` }),
+        el("p", { textContent: idea.spec?.summary ?? "" }),
+        reviewButtons((approve, reason) => api.reviewIdea(idea.id, approve, reason)),
       ),
     ),
-    ballots.length ? "" : el("p", { class: "muted", textContent: "Nothing waiting." }),
+    ideas.length ? "" : el("p", { class: "muted", textContent: "Nothing waiting." }),
     el("h2", { textContent: "Proposals on hold" }),
     ...proposals.map((p) =>
       el(

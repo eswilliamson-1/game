@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { createClient } from "@supabase/supabase-js";
 import settings from "../config/settings.json" with { type: "json" };
 import { createAI, NoAnswer, type AI } from "./lib/ai.ts";
-import { readGame, writeGame } from "./lib/files.ts";
+import { describeGame, readGame, writeGame } from "./lib/files.ts";
 import { safeGamePath, scanFiles, Spec, validateSpec, type GameFile } from "./lib/safety.ts";
 
 const OUT = ".candidate";
@@ -12,6 +12,11 @@ const OUT = ".candidate";
 export type Outcome = { ok: boolean; reason: string; title: string; notes: string };
 
 /** Applies generated files on top of the current game, then runs every non-browser check. */
+/** Ideas can sit on the board for a while, so the winner is checked against today's game. */
+export async function stillFits(ai: AI, spec: Spec, current: GameFile[]): Promise<boolean> {
+  return (await ai.review(spec, describeGame(current))).verdict !== "reject";
+}
+
 export async function buildCandidate(ai: AI, spec: Spec, current: GameFile[], failure?: string) {
   const fail = (reason: string) => ({ outcome: { ok: false, reason, title: spec.title, notes: "" }, files: [] as GameFile[] });
 
@@ -80,7 +85,12 @@ async function main() {
       throw new NoAnswer("The daily build limit was reached.");
     }
     const spec = await loadSpec();
-    ({ outcome, files } = await buildCandidate(createAI(), spec, readGame("game"), failure));
+    const ai = createAI();
+    const current = readGame("game");
+    if (!process.env.FIX_DESCRIPTION && !failure && !(await stillFits(ai, spec, current))) {
+      throw new NoAnswer("This idea no longer fits the game.");
+    }
+    ({ outcome, files } = await buildCandidate(ai, spec, current, failure));
   } catch (error) {
     if (!(error instanceof NoAnswer)) throw error;
     outcome = { ok: false, reason: error.message, title: "Change not built", notes: "" };

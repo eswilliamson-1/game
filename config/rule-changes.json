@@ -1,4 +1,5 @@
 [
   { "date": "2026-11-04", "change": "The launch review period ended, so ballots that pass screening now open without owner approval. Flagged items still wait for review." },
-  { "date": "2026-11-04", "change": "Players are now credited and ranked by their username, in place of an optional public name." }
+  { "date": "2026-11-04", "change": "Players are now credited and ranked by their username, in place of an optional public name." },
+  { "date": "2026-11-04", "change": "Ballots were replaced by a public idea board. The top upvoted idea is built each round, and \"change nothing this round\" is always an option." }
 ]

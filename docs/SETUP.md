@@ -52,7 +52,7 @@ The repository, label, and branch protection are already set up at `eswilliamson
 
 1. In Supabase, add two secrets under Vault: `github_repo` (`owner/name`) and `github_dispatch_token` (the token from step 4).
 2. Enable the `pg_cron` and `pg_net` extensions.
-3. Run `supabase/migrations/0002_schedule.sql`, `supabase/migrations/0004_privacy_schedule.sql`, `supabase/migrations/0007_public_record_timer.sql`, and `supabase/migrations/0008_one_minute_pace.sql`, in that order, in the SQL editor.
+3. Run `supabase/migrations/0002_schedule.sql`, `supabase/migrations/0004_privacy_schedule.sql`, `supabase/migrations/0007_public_record_timer.sql`, `supabase/migrations/0008_one_minute_pace.sql`, and `supabase/migrations/0009_idea_board.sql`, in that order, in the SQL editor.
 
 ## 7. Check before inviting anyone
 
@@ -72,7 +72,7 @@ Launch waits until all of these pass.
    ```
 
 4. Confirm the game FTP account can't list anything outside its own folder.
-5. Run the Plan workflow by hand, approve the first ballot at `https://vote.ewpages.com/review.html`, cast a vote, and watch one release all the way through.
+5. Run the Plan workflow by hand, approve the first ideas, if any are waiting, at `https://vote.ewpages.com/review.html`, upvote an idea, and watch one release all the way through.
 
 ## Everyday use
 

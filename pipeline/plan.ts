@@ -20,12 +20,19 @@ const store: Store = {
     unwrap(
       await db.from("proposals").select("id, body, reason, spec, title").eq("status", "queued").order("id").limit(1).maybeSingle(),
     ) as Proposal | null,
-  hasActiveBallot: async () =>
-    unwrap(await db.from("ballots").select("id").in("status", ["pending_review", "open", "building"])).length > 0,
-  history: async () =>
-    unwrap(await db.from("changes").select("kind, title").order("id", { ascending: false }).limit(20))
-      .map((c) => `${c.kind}: ${c.title}`)
-      .join("\n"),
+  needsIdeas: async () => {
+    const { min_ideas } = unwrap(await db.from("settings").select("min_ideas").single());
+    const ideas = unwrap(await db.from("ideas").select("id").in("status", ["open", "pending_review"]).eq("is_no_change", false));
+    return ideas.length < min_ideas;
+  },
+  markIdeasAsked: async () => {
+    unwrap(await db.from("settings").update({ last_ai_ideas_at: new Date().toISOString() }).eq("id", true));
+  },
+  history: async () => {
+    const changes = unwrap(await db.from("changes").select("kind, title").order("id", { ascending: false }).limit(20));
+    const ideas = unwrap(await db.from("ideas").select("title").eq("status", "open").eq("is_no_change", false));
+    return [...changes.map((c) => `${c.kind}: ${c.title}`), ...ideas.map((i) => `already on the idea board: ${i.title}`)].join("\n");
+  },
   rejectProposal: async (id, reason) => {
     unwrap(await db.from("proposals").update({ status: "rejected", reason }).eq("id", id));
   },
@@ -35,21 +42,21 @@ const store: Store = {
   queueProposal: async (id, spec) => {
     unwrap(await db.from("proposals").update({ status: "queued", title: spec.title, spec, reason: null }).eq("id", id));
   },
-  createBallot: async ({ question, source, proposalId, options, flagged }) => {
+  addIdea: async ({ spec, source, proposalId, flagged }) => {
     unwrap(
-      await db.rpc("create_ballot", {
-        p_question: question,
+      await db.rpc("add_idea", {
+        p_title: spec.title,
+        p_spec: spec,
         p_source: source,
         p_proposal: proposalId,
-        p_options: options.map((spec) => ({ label: spec.title, spec })),
         p_flagged: flagged,
       }),
     );
   },
   reviewWaiting: async () => {
-    const ballots = unwrap(await db.from("ballots").select("id").eq("status", "pending_review"));
+    const ideas = unwrap(await db.from("ideas").select("id").eq("status", "pending_review"));
     const held = unwrap(await db.from("proposals").select("id").eq("status", "held"));
-    return ballots.length + held.length > 0;
+    return ideas.length + held.length > 0;
   },
 };
 

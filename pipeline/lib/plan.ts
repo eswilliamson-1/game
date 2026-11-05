@@ -7,18 +7,13 @@ export interface Store {
   paused(): Promise<boolean>;
   pendingProposals(): Promise<Proposal[]>;
   nextQueued(): Promise<Proposal | null>;
-  hasActiveBallot(): Promise<boolean>;
+  needsIdeas(): Promise<boolean>;
+  markIdeasAsked(): Promise<void>;
   history(): Promise<string>;
   rejectProposal(id: number, reason: string): Promise<void>;
   holdProposal(id: number, reason: string): Promise<void>;
   queueProposal(id: number, spec: Spec): Promise<void>;
-  createBallot(input: {
-    question: string;
-    source: "ai" | "proposal";
-    proposalId: number | null;
-    options: Spec[];
-    flagged: boolean;
-  }): Promise<void>;
+  addIdea(input: { spec: Spec; source: "ai" | "proposal"; proposalId: number | null; flagged: boolean }): Promise<void>;
   reviewWaiting(): Promise<boolean>;
 }
 
@@ -78,7 +73,7 @@ async function screenPending({ ai, store }: PlanDeps): Promise<boolean> {
   return held;
 }
 
-async function ballotFromProposal({ ai, store, game }: PlanDeps, proposal: Proposal): Promise<void> {
+async function ideaFromProposal({ ai, store, game }: PlanDeps, proposal: Proposal): Promise<void> {
   const spec = proposal.spec!;
   let verdict;
   try {
@@ -92,19 +87,13 @@ async function ballotFromProposal({ ai, store, game }: PlanDeps, proposal: Propo
     await store.rejectProposal(proposal.id, verdict.public_reason);
     return;
   }
-  await store.createBallot({
-    question: `Should we make this change: ${spec.title}?`,
-    source: "proposal",
-    proposalId: proposal.id,
-    options: [spec],
-    flagged: verdict.verdict === "unsure",
-  });
+  await store.addIdea({ spec, source: "proposal", proposalId: proposal.id, flagged: verdict.verdict === "unsure" });
 }
 
-async function ballotFromQuestion({ ai, store, game }: PlanDeps): Promise<void> {
-  const { question, options } = await ai.question(game, await store.history());
-  const kept: Spec[] = [];
-  let flagged = false;
+async function ideasFromAI({ ai, store, game }: PlanDeps): Promise<void> {
+  // Marked first, so a failed attempt can't repeat on every timer check.
+  await store.markIdeasAsked();
+  const { options } = await ai.question(game, await store.history());
   for (const option of options.slice(0, 4)) {
     if (!validateSpec(option).ok) continue;
     let verdict;
@@ -115,28 +104,23 @@ async function ballotFromQuestion({ ai, store, game }: PlanDeps): Promise<void> 
       throw error;
     }
     if (verdict.verdict === "reject") continue;
-    if (verdict.verdict === "unsure") flagged = true;
-    kept.push(option);
+    await store.addIdea({ spec: option, source: "ai", proposalId: null, flagged: verdict.verdict === "unsure" });
   }
-  if (kept.length === 0) throw new NoAnswer("No question options passed review.");
-  await store.createBallot({ question, source: "ai", proposalId: null, options: kept, flagged });
 }
 
-/** Screens new proposals, then fills the ballot slot if it's free. */
+/** Screens new proposals, adds them to the board, and tops it up if it's running low. */
 export async function runPlan(deps: PlanDeps): Promise<void> {
   const { store, notifyOwner } = deps;
   if (await store.paused()) return;
 
   const held = await screenPending(deps);
 
-  if (!(await store.hasActiveBallot())) {
-    let next = await store.nextQueued();
-    while (next && !(await store.hasActiveBallot())) {
-      await ballotFromProposal(deps, next);
-      next = await store.nextQueued();
-    }
-    if (!(await store.hasActiveBallot())) await ballotFromQuestion(deps);
+  let next = await store.nextQueued();
+  while (next) {
+    await ideaFromProposal(deps, next);
+    next = await store.nextQueued();
   }
+  if (await store.needsIdeas()) await ideasFromAI(deps);
 
   if (held || (await store.reviewWaiting())) {
     await notifyOwner("Something is waiting for your review.");

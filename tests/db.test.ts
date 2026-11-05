@@ -8,6 +8,7 @@ const ALICE = "00000000-0000-0000-0000-000000000002";
 const BOB = "00000000-0000-0000-0000-000000000003";
 
 let db: PGlite;
+let moved: string[] = [];
 
 // Stands in for the parts of Supabase the migration relies on.
 const SUPABASE_STUB = `
@@ -41,24 +42,30 @@ const setName = (uid: string, name: string) =>
 
 async function reset() {
   await db.exec(`
-    truncate votes, options, ballots, proposals, changes, profiles restart identity cascade;
-    update settings set paused = false, launch_review = false, last_plan_dispatch_at = null;
+    truncate votes, options, ballots, proposals, changes, profiles, participation restart identity cascade;
+    insert into ideas (title, source, credit, status, is_no_change)
+      values ('Change nothing this round', 'rules', 'the rules', 'open', true);
+    update settings set paused = false, launch_review = false, last_plan_dispatch_at = null,
+      round_number = 1, round_closes_at = null, last_round_result = null, last_ai_ideas_at = null;
   `);
 }
 
-async function openBallot(labels = ["Add a dragon"]) {
-  const options = JSON.stringify(labels.map((label) => ({ label, spec: { title: label } })));
-  const { rows } = await service(
-    `select create_ballot('What next?', 'ai', null, $1::jsonb, false) as id`,
-    [options],
-  );
-  const id = rows[0].id as number;
-  const opts = await service(`select id, label, is_no_change from options where ballot_id = $1 order by id`, [id]);
-  return { id, options: opts.rows };
+async function addIdea(title = "Add a dragon", flagged = false, proposal: number | null = null) {
+  const source = proposal ? "proposal" : "ai";
+  const { rows } = await service(`select add_idea($1, $2::jsonb, $3, $4, $5) as id`, [title, JSON.stringify({ title }), source, proposal, flagged]);
+  return rows[0].id as number;
 }
 
-const expire = (id: number) => db.query(`update ballots set closes_at = now() - interval '1 minute' where id = $1`, [id]);
+const up = (uid: string, idea: number) => user(uid, `select toggle_upvote($1)`, [idea]);
+const noChange = async () => (await db.query<{ id: number }>(`select id from ideas where is_no_change`)).rows[0].id;
+const round = async () => (await db.query<Record<string, any>>(`select * from settings`)).rows[0];
+const idea = async (id: number) => (await db.query<Record<string, any>>(`select * from ideas where id = $1`, [id])).rows[0];
 const ballot = async (id: number) => (await db.query<Record<string, any>>(`select * from ballots where id = $1`, [id])).rows[0];
+
+async function endRound() {
+  await db.exec(`update settings set round_closes_at = now() - interval '1 minute'`);
+  return (await service(`select tick() as r`)).rows[0].r;
+}
 
 before(async () => {
   db = new PGlite();
@@ -70,89 +77,162 @@ before(async () => {
   await db.exec(readFileSync("supabase/migrations/0007_public_record_timer.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0008_one_minute_pace.sql", "utf8"));
   await db.query(`insert into owners values ($1)`, [OWNER]);
+  await db.query(`select create_ballot('Old question', 'ai', null, '[{"label":"Old idea"}]', false)`);
+  await db.exec(readFileSync("supabase/migrations/0009_idea_board.sql", "utf8"));
+  moved = (await db.query<{ title: string }>(`select title from ideas where not is_no_change`)).rows.map((r) => r.title);
 });
 
-test("every ballot gets the 'do not do this change' option", async () => {
-  await reset();
-  const { options } = await openBallot();
-  assert.equal(options.filter((o) => o.is_no_change).length, 1);
-  assert.equal(options.at(-1)!.label, "Do not do this change");
+test("ideas on a live ballot move to the board", () => {
+  assert.deepEqual(moved, ["Old idea"]);
 });
 
-test("only one ballot can be active", async () => {
+test("the board always has 'change nothing this round', and only once", async () => {
   await reset();
-  await openBallot();
-  await assert.rejects(openBallot());
+  const { rows } = await as("anon", "", `select * from board()`);
+  assert.deepEqual(rows.map((r) => [r.title, r.is_no_change]), [["Change nothing this round", true]]);
+  await assert.rejects(db.exec(`insert into ideas (title, source, status, is_no_change) values ('x', 'rules', 'open', true)`));
 });
 
-test("no votes means nothing moves and the ballot stays open", async () => {
+test("no votes means no clock and nothing moves", async () => {
   await reset();
-  const { id } = await openBallot();
-  await expire(id);
-  const { rows } = await service(`select tick() as r`);
-  assert.deepEqual(rows[0].r.build, []);
-  const b = await ballot(id);
-  assert.equal(b.status, "open");
-  assert.ok(new Date(b.closes_at) > new Date());
+  await addIdea();
+  assert.deepEqual((await service(`select tick() as r`)).rows[0].r.build, []);
+  const s = await round();
+  assert.equal(s.round_closes_at, null);
+  assert.equal(s.round_number, 1);
 });
 
-test("one vote is enough to move forward", async () => {
+test("one upvote starts the clock and is enough to win", async () => {
   await reset();
-  const { id, options } = await openBallot();
-  await user(ALICE, `select cast_vote($1, $2)`, [id, options[0].id]);
-  await expire(id);
-  const { rows } = await service(`select tick() as r`);
-  assert.deepEqual(rows[0].r.build, [id]);
-  assert.equal((await ballot(id)).status, "building");
+  const id = await addIdea();
+  await up(ALICE, id);
+  assert.ok((await round()).round_closes_at);
+  assert.deepEqual((await service(`select tick() as r`)).rows[0].r.build, []);
+  const { build } = await endRound();
+  assert.equal(build.length, 1);
+  const made = await ballot(build[0]);
+  assert.equal(made.status, "building");
+  assert.equal(made.question, "Add a dragon");
+  assert.equal((await idea(id)).status, "won");
+  const s = await round();
+  assert.equal(s.round_number, 2);
+  assert.equal(s.round_closes_at, null);
 });
 
-test("ties go to 'do not do this change'", async () => {
+test("the top idea wins, and other votes carry into the next round", async () => {
   await reset();
-  const { id, options } = await openBallot(["Add a dragon", "Add a castle"]);
-  await user(ALICE, `select cast_vote($1, $2)`, [id, options[0].id]);
-  await user(BOB, `select cast_vote($1, $2)`, [id, options[1].id]);
-  await expire(id);
-  await service(`select tick()`);
-  const b = await ballot(id);
-  assert.equal(b.status, "closed");
-  assert.equal(b.winner_option_id, options[2].id);
+  const [a, b] = [await addIdea("A"), await addIdea("B")];
+  await up(ALICE, a);
+  await up(BOB, a);
+  await up(OWNER, b);
+  const { build } = await endRound();
+  assert.equal((await ballot(build[0])).question, "A");
+  const board = await as("anon", "", `select title, votes::int from board()`);
+  assert.deepEqual(board.rows, [{ title: "B", votes: 1 }, { title: "Change nothing this round", votes: 0 }]);
 });
 
-test("voting again changes the vote instead of adding one", async () => {
+test("ties change nothing, and the tied ideas keep their votes", async () => {
   await reset();
-  const { id, options } = await openBallot();
-  await user(ALICE, `select cast_vote($1, $2)`, [id, options[0].id]);
-  await user(ALICE, `select cast_vote($1, $2)`, [id, options[1].id]);
-  const { rows } = await db.query<{ n: number }>(`select count(*)::int n from votes`);
-  assert.equal(rows[0].n, 1);
+  const [a, b] = [await addIdea("A"), await addIdea("B")];
+  await up(ALICE, a);
+  await up(BOB, b);
+  assert.deepEqual((await endRound()).build, []);
+  const s = await round();
+  assert.match(s.last_round_result, /tie/);
+  assert.equal(s.round_number, 2);
+  assert.equal((await idea(a)).status, "open");
+  const { rows } = await db.query<{ n: number }>(`select count(*)::int n from upvotes`);
+  assert.equal(rows[0].n, 2);
 });
 
-test("voting needs a login and an option from that ballot", async () => {
+test("'change nothing' can win, and its votes reset each round", async () => {
   await reset();
-  const { id, options } = await openBallot();
-  await assert.rejects(as("anon", "", `select cast_vote($1, $2)`, [id, options[0].id]));
-  await assert.rejects(user(ALICE, `select cast_vote($1, $2)`, [id, 999999]));
+  await addIdea();
+  const nothing = await noChange();
+  await up(ALICE, nothing);
+  assert.deepEqual((await endRound()).build, []);
+  assert.match((await round()).last_round_result, /change nothing/);
+  assert.equal((await db.query(`select 1 from upvotes`)).rows.length, 0);
+});
+
+test("a tie with 'change nothing' changes nothing", async () => {
+  await reset();
+  const id = await addIdea();
+  await up(ALICE, id);
+  await up(BOB, await noChange());
+  assert.deepEqual((await endRound()).build, []);
+  assert.equal((await idea(id)).status, "open");
+});
+
+test("upvoting twice takes the vote back, and players can back several ideas", async () => {
+  await reset();
+  const [a, b] = [await addIdea("A"), await addIdea("B")];
+  await up(ALICE, a);
+  await up(ALICE, b);
+  await up(ALICE, a);
+  const { rows } = await user(ALICE, `select title, mine from board() where not is_no_change order by title`);
+  assert.deepEqual(rows, [{ title: "A", mine: false }, { title: "B", mine: true }]);
+});
+
+test("if everyone takes their votes back, the round doesn't end", async () => {
+  await reset();
+  const id = await addIdea();
+  await up(ALICE, id);
+  await up(ALICE, id);
+  assert.deepEqual((await endRound()).build, []);
+  const s = await round();
+  assert.equal(s.round_closes_at, null);
+  assert.equal(s.round_number, 1);
+});
+
+test("a round can't end while a change is building", async () => {
+  await reset();
+  const [a, b] = [await addIdea("A"), await addIdea("B")];
+  await up(ALICE, a);
+  const { build } = await endRound();
+  await up(BOB, b);
+  await endRound();
+  assert.equal((await idea(b)).status, "open");
+  await service(`select complete_build($1, true, 'v1', 'A', 'Done')`, [build[0]]);
+  const next = (await service(`select tick() as r`)).rows[0].r;
+  assert.equal(next.build.length, 1);
+  assert.equal((await idea(b)).status, "won");
+});
+
+test("upvoting needs a login and an idea on the board", async () => {
+  await reset();
+  const id = await addIdea();
+  await assert.rejects(as("anon", "", `select toggle_upvote($1)`, [id]));
+  await assert.rejects(up(ALICE, 999999));
+  await up(ALICE, id);
+  await endRound();
+  await assert.rejects(up(BOB, id));
 });
 
 test("players can't write to tables directly or run pipeline functions", async () => {
   await reset();
-  const { id, options } = await openBallot();
-  await assert.rejects(user(ALICE, `insert into votes (ballot_id, user_id, option_id) values ($1, $2, $3)`, [id, ALICE, options[0].id]));
+  const id = await addIdea();
+  await assert.rejects(user(ALICE, `insert into upvotes (idea_id, user_id) values ($1, $2)`, [id, ALICE]));
+  await assert.rejects(user(ALICE, `update ideas set status = 'won'`));
   await assert.rejects(user(ALICE, `update settings set paused = true`));
   await assert.rejects(user(ALICE, `update ballots set status = 'closed'`));
   await assert.rejects(user(ALICE, `select tick()`));
-  await assert.rejects(user(ALICE, `select complete_build($1, true, 'v1', 'x', 'y')`, [id]));
-  await assert.rejects(user(ALICE, `select create_ballot('q', 'ai', null, '[{"label":"x"}]', false)`));
+  await assert.rejects(user(ALICE, `select complete_build(1, true, 'v1', 'x', 'y')`));
+  await assert.rejects(user(ALICE, `select add_idea('x', '{}', 'ai', null, false)`));
+  await assert.rejects(user(ALICE, `select cast_vote(1, 1)`));
 });
 
-test("players can't see each other's votes or proposal text", async () => {
+test("players can't see who voted for what, or anyone's proposal text", async () => {
   await reset();
-  const { id, options } = await openBallot();
-  await user(ALICE, `select cast_vote($1, $2)`, [id, options[0].id]);
+  const id = await addIdea();
+  await up(ALICE, id);
   await user(ALICE, `select submit_proposal('Add a pet dragon')`);
-  assert.equal((await user(BOB, `select * from votes`)).rows.length, 0);
+  await assert.rejects(user(BOB, `select * from upvotes`));
+  await assert.rejects(user(BOB, `select * from participation`));
   assert.equal((await user(BOB, `select * from proposals`)).rows.length, 0);
   assert.equal((await user(ALICE, `select * from proposals`)).rows.length, 1);
+  const { rows } = await user(BOB, `select votes::int, mine from board() where id = $1`, [id]);
+  assert.deepEqual(rows, [{ votes: 1, mine: false }]);
 });
 
 test("proposals with links, code, or hidden characters are refused", async () => {
@@ -177,67 +257,75 @@ test("proposals are limited per person per day", async () => {
   await user(BOB, `select submit_proposal('A different player')`);
 });
 
-test("during launch review, ballots stay hidden until the owner approves", async () => {
+test("during launch review, ideas stay hidden until the owner approves", async () => {
   await reset();
   await db.exec(`update settings set launch_review = true`);
-  const { id, options } = await openBallot();
-  assert.equal((await ballot(id)).status, "pending_review");
-  assert.equal((await user(ALICE, `select * from ballots`)).rows.length, 0);
-  assert.equal((await user(ALICE, `select * from options`)).rows.length, 0);
-  assert.equal((await user(ALICE, `select * from ballot_results($1)`, [id])).rows.length, 0);
-  await assert.rejects(user(ALICE, `select cast_vote($1, $2)`, [id, options[0].id]));
-  await assert.rejects(user(ALICE, `select review_ballot($1, true, '')`, [id]));
-  await user(OWNER, `select review_ballot($1, true, '')`, [id]);
-  assert.equal((await ballot(id)).status, "open");
+  const id = await addIdea();
+  assert.equal((await idea(id)).status, "pending_review");
+  assert.equal((await user(ALICE, `select * from board() where id = $1`, [id])).rows.length, 0);
+  assert.equal((await user(ALICE, `select * from ideas`)).rows.length, 0);
+  await assert.rejects(up(ALICE, id));
+  await assert.rejects(user(ALICE, `select review_idea($1, true, '')`, [id]));
+  await user(OWNER, `select review_idea($1, true, '')`, [id]);
+  assert.equal((await idea(id)).status, "open");
 });
 
-test("a flagged ballot needs review even after the launch period", async () => {
+test("a flagged idea needs review even after the launch period", async () => {
   await reset();
-  const { rows } = await service(`select create_ballot('q', 'ai', null, '[{"label":"x"}]', true) as id`);
-  assert.equal((await ballot(rows[0].id)).status, "pending_review");
+  assert.equal((await idea(await addIdea("x", true))).status, "pending_review");
 });
 
-test("rejecting needs a public reason", async () => {
+test("rejecting an idea needs a public reason, which reaches the suggestion", async () => {
   await reset();
-  await db.exec(`update settings set launch_review = true`);
-  const { id } = await openBallot();
-  await assert.rejects(user(OWNER, `select review_ballot($1, false, ' ')`, [id]));
-  await user(OWNER, `select review_ballot($1, false, 'Breaks rule 8')`, [id]);
-  assert.equal((await ballot(id)).outcome, "Breaks rule 8");
+  const { rows } = await user(ALICE, `select submit_proposal('Add a dragon') as id`);
+  const id = await addIdea("Add a dragon", true, rows[0].id);
+  await assert.rejects(user(OWNER, `select review_idea($1, false, ' ')`, [id]));
+  await user(OWNER, `select review_idea($1, false, 'Breaks rule 8')`, [id]);
+  assert.equal((await idea(id)).status, "rejected");
+  const listed = await as("anon", "", `select status, reason from public_proposals`);
+  assert.deepEqual(listed.rows, [{ status: "rejected", reason: "Breaks rule 8" }]);
 });
 
 test("pausing stops the timer and voting, and is publicly logged", async () => {
   await reset();
-  const { id, options } = await openBallot();
+  const id = await addIdea();
   await assert.rejects(user(ALICE, `select set_paused(true, 'x')`));
   await user(OWNER, `select set_paused(true, 'Security check')`);
-  await assert.rejects(user(ALICE, `select cast_vote($1, $2)`, [id, options[0].id]));
+  await assert.rejects(up(ALICE, id));
   const { rows } = await service(`select tick() as r`);
   assert.equal(rows[0].r.paused, true);
   const log = await as("anon", "", `select kind, notes from changes`);
   assert.deepEqual(log.rows, [{ kind: "pause", notes: "Security check" }]);
 });
 
-test("a failed build is published and frees the slot for the next ballot", async () => {
+test("a failed build is published, and the next round can run", async () => {
   await reset();
-  const { id, options } = await openBallot();
-  await user(ALICE, `select cast_vote($1, $2)`, [id, options[0].id]);
-  await expire(id);
-  await service(`select tick()`);
-  await service(`select complete_build($1, false, null, 'Add a dragon', 'Failed the frame rate test')`, [id]);
-  assert.equal((await ballot(id)).status, "closed");
+  const [a, b] = [await addIdea("A"), await addIdea("B")];
+  await up(ALICE, a);
+  const { build } = await endRound();
+  await service(`select complete_build($1, false, null, 'A', 'Failed the frame rate test')`, [build[0]]);
+  assert.equal((await ballot(build[0])).status, "closed");
   const log = await as("anon", "", `select kind, notes from changes`);
   assert.deepEqual(log.rows, [{ kind: "failed", notes: "Failed the frame rate test" }]);
-  await openBallot();
+  await up(ALICE, b);
+  assert.equal((await endRound()).build.length, 1);
 });
 
-test("planning is throttled, and not while a ballot waits", async () => {
+test("planning runs for new suggestions or a low board, but can't repeat quickly", async () => {
   await reset();
   assert.equal((await service(`select tick() as r`)).rows[0].r.plan, true);
   assert.equal((await service(`select tick() as r`)).rows[0].r.plan, false);
   await db.exec(`update settings set last_plan_dispatch_at = null`);
-  await openBallot();
+  for (const title of ["A", "B", "C"]) await addIdea(title);
   assert.equal((await service(`select tick() as r`)).rows[0].r.plan, false);
+});
+
+test("a low board only asks the AI for ideas every so often", async () => {
+  await reset();
+  await db.exec(`update settings set last_ai_ideas_at = now()`);
+  assert.equal((await service(`select tick() as r`)).rows[0].r.plan, false);
+  await db.exec(`update settings set last_ai_ideas_at = now() - interval '31 minutes'`);
+  assert.equal((await service(`select tick() as r`)).rows[0].r.plan, true);
 });
 
 test("the pace is fast for a few players and slows as more become active", async () => {
@@ -283,16 +371,10 @@ test("the pace is fast for a few players and slows as more become active", async
 
 async function buildProposal(uid: string) {
   const { rows } = await user(uid, "select submit_proposal('Add a pet dragon') as id");
-  const made = await service(
-    "select create_ballot('Add it?', 'proposal', $1, '[{\"label\":\"Add it\"}]', false) as id",
-    [rows[0].id],
-  );
-  const id = made.rows[0].id as number;
-  const options = await service("select id from options where ballot_id = $1 order by id", [id]);
-  await user(ALICE, "select cast_vote($1, $2)", [id, options.rows[0].id]);
-  await expire(id);
-  await service("select tick()");
-  await service("select complete_build($1, true, 'v1', 'Pet dragon', 'Dragons now follow you')", [id]);
+  const id = await addIdea("Add it", false, rows[0].id);
+  await up(ALICE, id);
+  const { build } = await endRound();
+  await service("select complete_build($1, true, 'v1', 'Pet dragon', 'Dragons now follow you')", [build[0]]);
 }
 
 test("patch notes credit the player who suggested the change", async () => {
@@ -307,8 +389,7 @@ test("players with no name are credited as 'a player', and AI ideas as the AI", 
   await reset();
   await buildProposal(BOB);
   assert.equal((await as("anon", "", "select credit from changes")).rows[0].credit, "a player");
-  const { id } = await openBallot();
-  assert.equal((await ballot(id)).credit, "the AI");
+  assert.equal((await idea(await addIdea())).credit, "the AI");
 });
 
 test("usernames become public names, can't be changed, and reserved ones are refused", async () => {
@@ -418,47 +499,45 @@ test("the daily cleanup clears old text and stale accounts, but keeps owners and
   await db.query(`update auth.users set created_at = now()`);
 });
 
-test("points reward taking part, and the chosen option never changes them", async () => {
+test("points reward taking part, and which ideas a player backs never changes them", async () => {
   await reset();
-  const { id, options } = await openBallot();
-  await user(ALICE, "select cast_vote($1, $2)", [id, options[0].id]);
-  await user(BOB, "select cast_vote($1, $2)", [id, options.at(-1)!.id]);
-  const alice = (await user(ALICE, "select my_progress() as p")).rows[0].p;
-  const bob = (await user(BOB, "select my_progress() as p")).rows[0].p;
-  assert.equal(alice.points, 1);
-  assert.equal(bob.points, 1);
-
-  await user(ALICE, "select cast_vote($1, $2)", [id, options.at(-1)!.id]);
+  const [a, b] = [await addIdea("A"), await addIdea("B")];
+  await up(ALICE, a);
+  await up(ALICE, b);
+  await up(BOB, await noChange());
+  assert.equal((await user(ALICE, "select my_progress() as p")).rows[0].p.points, 1);
+  assert.equal((await user(BOB, "select my_progress() as p")).rows[0].p.points, 1);
+  await up(ALICE, a);
+  await up(ALICE, a);
   assert.equal((await user(ALICE, "select my_progress() as p")).rows[0].p.points, 1);
 });
 
-test("a suggestion that gets built earns more than one that only reaches a ballot", async () => {
+test("a suggestion that gets built earns more than one that only reaches the board", async () => {
   await reset();
   await buildProposal(BOB);
   const { p } = (await user(BOB, "select my_progress() as p")).rows[0];
   assert.deepEqual([p.on_ballot, p.built, p.points], [1, 1, 25]);
 });
 
-test("a voting streak ends when a finished ballot is missed", async () => {
+test("a voting streak ends when a finished round is missed", async () => {
   await reset();
-  const vote = async (who: string[]) => {
-    const { id, options } = await openBallot();
-    for (const uid of who) await user(uid, "select cast_vote($1, $2)", [id, options.at(-1)!.id]);
-    await expire(id);
-    await service("select tick()");
+  const nothing = await noChange();
+  const play = async (who: string[]) => {
+    for (const uid of who) await up(uid, nothing);
+    await endRound();
   };
-  await vote([ALICE, BOB]);
-  await vote([BOB]);
-  await vote([ALICE, BOB]);
+  await play([ALICE, BOB]);
+  await play([BOB]);
+  await play([ALICE, BOB]);
   assert.equal((await user(ALICE, "select my_progress() as p")).rows[0].p.streak, 1);
   assert.equal((await user(BOB, "select my_progress() as p")).rows[0].p.streak, 3);
 });
 
 test("the leaderboard shows only named players with points, and is public", async () => {
   await reset();
-  const { id, options } = await openBallot();
-  await user(ALICE, "select cast_vote($1, $2)", [id, options[0].id]);
-  await user(BOB, "select cast_vote($1, $2)", [id, options[0].id]);
+  const id = await addIdea();
+  await up(ALICE, id);
+  await up(BOB, id);
   await setName(BOB, "Named Bob");
   await setName(OWNER, "Idle One");
   const board = await as("anon", "", "select * from leaderboard()");

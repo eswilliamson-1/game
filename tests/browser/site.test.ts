@@ -46,33 +46,32 @@ const logIn = async (page: Page) => {
 
 test("the review link only appears for the owner", async () => {
   const { page, errors } = await open("/");
-  await page.waitForSelector("#ballot");
+  await page.waitForSelector("#board");
   assert.equal(await page.locator('#account a[href="review.html"]').count(), 0);
   await logIn(page);
   await page.waitForSelector('#account a[href="review.html"]');
   assert.deepEqual(errors, []);
 });
 
-test("logged-out players see the ballot, but can't vote", async () => {
+test("logged-out players see the board, but can't vote", async () => {
   const { page, errors } = await open("/");
-  await page.waitForSelector("#ballot");
+  await page.waitForSelector("#board");
   assert.equal(await page.locator(".option").first().isDisabled(), true);
-  assert.equal(await page.locator("text=Do not do this change").count(), 1);
-  assert.equal(await page.locator("text=Suggested by the AI").count(), 1);
+  assert.equal(await page.locator("text=Change nothing this round").count(), 1);
+  assert.equal(await page.locator(".option").nth(0).locator("text=Suggested by the AI").count(), 1);
   assert.deepEqual(errors, []);
   await shot(page, "home-desktop");
 });
 
-test("a logged-in player can vote and change their vote", async () => {
+test("a logged-in player can upvote several ideas and take a vote back", async () => {
   const { page, errors } = await open("/");
   await logIn(page);
-  const second = page.locator(".option").nth(1);
-  await second.click();
-  await page.waitForSelector('.option[aria-pressed="true"]');
-  assert.equal(await page.locator(".option").nth(1).getAttribute("aria-pressed"), "true");
   await page.locator(".option").nth(0).click();
-  await page.waitForFunction(() => document.querySelectorAll(".option")[0].getAttribute("aria-pressed") === "true");
-  assert.equal(await page.locator('.option[aria-pressed="true"]').count(), 1);
+  await page.waitForSelector('.option[aria-pressed="true"]');
+  await page.locator(".option").nth(1).click();
+  await page.waitForFunction(() => document.querySelectorAll('.option[aria-pressed="true"]').length === 2);
+  await page.locator('.option[aria-pressed="true"]').first().click();
+  await page.waitForFunction(() => document.querySelectorAll('.option[aria-pressed="true"]').length === 1);
   assert.deepEqual(errors, []);
 });
 
@@ -92,23 +91,23 @@ test("the suggestions page lists every suggestion with its status", async () => 
   await page.waitForSelector("text=being checked");
   assert.equal(await page.locator("#suggestions .note").count(), 3);
   assert.equal(await page.locator("text=by dragon_fan").count(), 1);
-  assert.equal(await page.locator("text=waiting for a ballot").count(), 1);
+  assert.equal(await page.locator("text=on the board").count(), 1);
   assert.deepEqual(errors, []);
   await shot(page, "suggestions");
 });
 
-test("the ballot shows a live countdown", async () => {
+test("the board shows a live countdown", async () => {
   const page = await browser.newPage();
   await page.clock.install();
   await page.goto(URL);
   await page.waitForSelector("#ballot-time");
   const read = () => page.locator("#ballot-time").innerText();
-  assert.match(await read(), /^Voting closes in 2[12]:\d\d$/);
+  assert.match(await read(), /^Round ends in 2[12]:\d\d$/);
   const before = await read();
   await page.clock.fastForward(5_000);
   assert.notEqual(await read(), before);
   await page.clock.fastForward(23 * 60_000);
-  assert.match(await read(), /closing now/);
+  assert.match(await read(), /ending now/);
 });
 
 test("every page says when a change is building", async () => {
@@ -118,7 +117,7 @@ test("every page says when a change is building", async () => {
     assert.deepEqual(errors, []);
   }
   const { page } = await open("/");
-  await page.waitForSelector("#ballot");
+  await page.waitForSelector("#board");
   assert.equal(await page.locator("#build-status").isVisible(), false);
 });
 
@@ -231,7 +230,7 @@ test("the review page needs a login, then shows the queue", async () => {
   const { page, errors } = await open("/review.html");
   await page.waitForSelector("#username");
   await logIn(page);
-  await page.waitForSelector("text=Ballots waiting for approval");
+  await page.waitForSelector("text=Ideas waiting for approval");
   assert.equal(await page.locator("text=Pause the game").count(), 1);
   assert.deepEqual(errors, []);
   await shot(page, "review");

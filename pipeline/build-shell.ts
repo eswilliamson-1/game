@@ -51,15 +51,15 @@ function privacyHtml(): string {
     <h2>What we keep</h2>
     <ul>
       <li><strong>Your username and password.</strong> The password is stored only as a secure hash, so nobody can read it. We don't ask for your email or your real name. Your username is public, so please don't use your real name.</li>
-      <li><strong>Your votes</strong>, which are never shown next to your name or ID.</li>
+      <li><strong>Your votes</strong>, including which ideas you upvoted. Only totals are public, never who voted for what.</li>
       <li><strong>Your suggestions.</strong> The owner can read them. The public suggestions page lists when each one arrived and its status, and adds an AI-written summary and your username once it passes screening. Your original text is never public.</li>
-      <li><strong>Public credit.</strong> Your username is shown when a suggestion of yours reaches a ballot or the patch notes, and on the leaderboard with your points and level.</li>
+      <li><strong>Public credit.</strong> Your username is shown when a suggestion of yours reaches the idea board or the patch notes, and on the leaderboard with your points and level.</li>
       <li><strong>Your points, level, and badges</strong>, worked out from the activity above.</li>
       <li><strong>Technical logs</strong>, including IP addresses, kept by our hosting and database providers for security.</li>
     </ul>
     <p>Suggestions that contain an email address or phone number are refused. Please leave out other personal details too.</p>
     <h2>Why we keep it</h2>
-    <p>We use this data only to run the game: counting votes, reviewing and building suggestions, giving credit, showing progress, and preventing abuse. The legal basis is our legitimate interest in running the game you chose to join. We don't sell your data or share it for advertising, and we use no ads, analytics, or tracking.</p>
+    <p>We use this data only to run the game: counting votes, running rounds, reviewing and building suggestions, giving credit, showing progress, and preventing abuse. The legal basis is our legitimate interest in running the game you chose to join. We don't sell your data or share it for advertising, and we use no ads, analytics, or tracking.</p>
     <h2>Who handles it</h2>
     <ul>
       <li><strong>Supabase</strong> stores accounts, votes, and suggestions in ${region}.</li>

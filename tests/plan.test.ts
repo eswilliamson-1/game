@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { NoAnswer, type AI, type ScreenResult } from "../pipeline/lib/ai.ts";
 import { runPlan, type Proposal, type Store } from "../pipeline/lib/plan.ts";
-import { buildCandidate } from "../pipeline/build.ts";
+import { buildCandidate, stillFits } from "../pipeline/build.ts";
 import type { Spec } from "../pipeline/lib/safety.ts";
 
 const SPEC: Spec = {
@@ -13,15 +13,19 @@ const SPEC: Spec = {
 };
 const EMPTY: Spec = { title: "", summary: "", changes: [], player_impact: "" };
 
-function fakeStore(pending: Proposal[] = [], active = false) {
+function fakeStore(pending: Proposal[] = [], fullBoard = false) {
   const log: string[] = [];
   const queued: Proposal[] = [];
-  let hasBallot = active;
+  let needsIdeas = !fullBoard;
   const store: Store = {
     paused: async () => false,
     pendingProposals: async () => pending,
     nextQueued: async () => queued.shift() ?? null,
-    hasActiveBallot: async () => hasBallot,
+    needsIdeas: async () => needsIdeas,
+    markIdeasAsked: async () => {
+      needsIdeas = false;
+      log.push("asked");
+    },
     history: async () => "",
     rejectProposal: async (id, reason) => void log.push(`reject ${id}: ${reason}`),
     holdProposal: async (id) => void log.push(`hold ${id}`),
@@ -29,10 +33,7 @@ function fakeStore(pending: Proposal[] = [], active = false) {
       log.push(`queue ${id}`);
       queued.push({ id, body: "", reason: null, spec, title: spec.title });
     },
-    createBallot: async ({ source, flagged, options }) => {
-      hasBallot = true;
-      log.push(`ballot ${source} flagged=${flagged} options=${options.length}`);
-    },
+    addIdea: async ({ source, flagged, spec }) => void log.push(`idea ${source} flagged=${flagged} ${spec.title}`),
     reviewWaiting: async () => false,
   };
   return { store, log };
@@ -61,10 +62,10 @@ const run = (ai: AI, store: Store) => runPlan({ ai, store, game: "", notifyOwner
 const screenAs = (result: Partial<ScreenResult>) => async () =>
   ({ verdict: "pass", public_reason: "", spec: EMPTY, ...result }) as ScreenResult;
 
-test("a clean proposal goes through both AI checks onto a ballot", async () => {
-  const { store, log } = fakeStore([proposal(1)]);
+test("a clean proposal goes through both AI checks onto the board", async () => {
+  const { store, log } = fakeStore([proposal(1)], true);
   await run(fakeAI(), store);
-  assert.deepEqual(log, ["queue 1", "ballot proposal flagged=false options=1"]);
+  assert.deepEqual(log, ["queue 1", "idea proposal flagged=false Add a pet dragon"]);
 });
 
 test("the AI never sees proposals that fail the basic checks", async () => {
@@ -112,26 +113,28 @@ test("the owner's approval can't override a rejection or a dirty spec", async ()
 });
 
 test("the second reviewer can reject or flag a queued proposal", async () => {
-  let { store, log } = fakeStore([proposal(1)]);
-  const ai = fakeAI({
-    review: async () => ({ verdict: "reject", public_reason: "Sets up a fake login." }),
-    question: async () => ({ question: "q", options: [] }),
-  });
-  await assert.rejects(run(ai, store), NoAnswer);
+  let { store, log } = fakeStore([proposal(1)], true);
+  await run(fakeAI({ review: async () => ({ verdict: "reject", public_reason: "Sets up a fake login." }) }), store);
   assert.deepEqual(log, ["queue 1", "reject 1: Sets up a fake login."]);
 
-  ({ store, log } = fakeStore([proposal(1)]));
+  ({ store, log } = fakeStore([proposal(1)], true));
   await run(fakeAI({ review: async () => ({ verdict: "unsure", public_reason: "" }) }), store);
-  assert.deepEqual(log, ["queue 1", "ballot proposal flagged=true options=1"]);
+  assert.deepEqual(log, ["queue 1", "idea proposal flagged=true Add a pet dragon"]);
 });
 
-test("when nothing is queued, the AI asks the next question", async () => {
+test("when the board runs low, the AI adds ideas", async () => {
   const { store, log } = fakeStore();
   await run(fakeAI(), store);
-  assert.deepEqual(log, ["ballot ai flagged=false options=1"]);
+  assert.deepEqual(log, ["asked", "idea ai flagged=false Add a pet dragon"]);
 });
 
-test("an open ballot means no AI question and no spending", async () => {
+test("AI ideas that fail review stay off the board, and the attempt is recorded", async () => {
+  const { store, log } = fakeStore();
+  await run(fakeAI({ review: async () => ({ verdict: "reject", public_reason: "No." }) }), store);
+  assert.deepEqual(log, ["asked"]);
+});
+
+test("a full board means no AI question and no spending", async () => {
   const { store, log } = fakeStore([], true);
   let called = false;
   await run(fakeAI({ question: async () => ((called = true), { question: "", options: [] }) }), store);
@@ -141,6 +144,11 @@ test("an open ballot means no AI question and no spending", async () => {
 
 const CURRENT = [{ path: "index.html", content: '<html><script src="game.js"></script></html>' }];
 const GOOD = [{ path: "game.js", content: "window.gameTest = { inputsHandled: 0, goal: 'Win' };" }];
+
+test("a winning idea is checked against today's game before building", async () => {
+  assert.equal(await stillFits(fakeAI(), SPEC, CURRENT), true);
+  assert.equal(await stillFits(fakeAI({ review: async () => ({ verdict: "reject", public_reason: "Out of date." }) }), SPEC, CURRENT), false);
+});
 
 test("a clean build becomes a candidate", async () => {
   const ai = fakeAI({ build: async () => ({ files: GOOD, deleted: [], patch_title: "T", patch_notes: "N" }) });

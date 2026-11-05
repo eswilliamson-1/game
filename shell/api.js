@@ -35,15 +35,8 @@ export function liveApi(url, key) {
     onAuthChange: (fn) => db.auth.onAuthStateChange(() => fn()),
     isOwner: async () => must(await db.rpc("is_owner")),
     paused: async () => must(await db.from("settings").select("paused").single()).paused,
-    async currentBallot() {
-      const ballot = must(
-        await db.from("ballots").select("*").in("status", ["open", "building"]).order("id", { ascending: false }).limit(1).maybeSingle(),
-      );
-      if (!ballot) return null;
-      const options = must(await db.from("options").select("*").eq("ballot_id", ballot.id).order("id"));
-      const results = must(await db.rpc("ballot_results", { p_ballot: ballot.id }));
-      return { ...ballot, options, results };
-    },
+    board: async () => must(await db.rpc("board")),
+    round: async () => must(await db.from("settings").select("round_number, round_closes_at, last_round_result").single()),
     async windowMinutes() {
       const [hours, minutes] = must(await db.rpc("cycle_interval")).split(":").map(Number);
       return hours * 60 + minutes;
@@ -53,11 +46,7 @@ export function liveApi(url, key) {
       if (!ballot) return null;
       return must(await db.from("options").select("label").eq("id", ballot.winner_option_id).single());
     },
-    async myVote(ballotId, userId) {
-      const row = must(await db.from("votes").select("option_id").eq("ballot_id", ballotId).eq("user_id", userId).maybeSingle());
-      return row?.option_id ?? null;
-    },
-    vote: async (ballot, option) => must(await db.rpc("cast_vote", { p_ballot: ballot, p_option: option })),
+    upvote: async (idea) => must(await db.rpc("toggle_upvote", { p_idea: idea })),
     propose: async (body) => must(await db.rpc("submit_proposal", { p_body: body })),
     myName: async (userId) => must(await db.from("profiles").select("display_name").eq("user_id", userId).maybeSingle())?.display_name ?? "",
     myProgress: async () => must(await db.rpc("my_progress")),
@@ -70,11 +59,11 @@ export function liveApi(url, key) {
     proposals: async (limit) => must(await db.from("public_proposals").select("*").order("id", { ascending: false }).limit(limit)),
     changes: async () => must(await db.from("changes").select("*").order("id", { ascending: false }).limit(200)),
     async reviewQueue() {
-      const ballots = must(await db.from("ballots").select("*, options(*)").eq("status", "pending_review"));
+      const ideas = must(await db.from("ideas").select("*").eq("status", "pending_review"));
       const proposals = must(await db.from("proposals").select("*").eq("status", "held"));
-      return { ballots, proposals };
+      return { ideas, proposals };
     },
-    reviewBallot: async (id, approve, reason) => must(await db.rpc("review_ballot", { p_ballot: id, p_approve: approve, p_reason: reason })),
+    reviewIdea: async (id, approve, reason) => must(await db.rpc("review_idea", { p_idea: id, p_approve: approve, p_reason: reason })),
     reviewProposal: async (id, approve, reason) => must(await db.rpc("review_proposal", { p_proposal: id, p_approve: approve, p_reason: reason })),
     setPaused: async (paused, reason) => must(await db.rpc("set_paused", { p_paused: paused, p_reason: reason })),
     clearName: async (name) => must(await db.rpc("clear_display_name", { p_name: name })),
@@ -84,26 +73,14 @@ export function liveApi(url, key) {
 /** Sample data for local previews, used only when no Supabase project is configured. */
 export function previewApi() {
   const spec = (summary) => ({ summary, changes: [], player_impact: "" });
-  const ballot = {
-    id: 1,
-    status: "open",
-    question: "What kind of game should this become?",
-    credit: "the AI",
-    closes_at: new Date(Date.now() + 22 * 60_000).toISOString(),
-    options: [
-      { id: 1, label: "A tiny tower climber", spec: spec("Tap to jump between platforms and climb as high as you can."), is_no_change: false },
-      { id: 2, label: "A garden that grows while you tend it", spec: spec("Plant seeds, water them, and fill the plot."), is_no_change: false },
-      { id: 3, label: "A one-room mystery", spec: spec("Search a small room for clues to open the door."), is_no_change: false },
-      { id: 4, label: "Do not do this change", spec: null, is_no_change: true },
-    ],
-    results: [
-      { option_id: 1, votes: 3 },
-      { option_id: 2, votes: 1 },
-      { option_id: 3, votes: 2 },
-      { option_id: 4, votes: 0 },
-    ],
-  };
-  let vote = null;
+  const closes = new Date(Date.now() + 22 * 60_000).toISOString();
+  const ideas = [
+    { id: 1, title: "A tiny tower climber", summary: "Tap to jump between platforms and climb as high as you can.", credit: "the AI", votes: 3, is_no_change: false, mine: false },
+    { id: 2, title: "A garden that grows while you tend it", summary: "Plant seeds, water them, and fill the plot.", credit: "dragon_fan", votes: 1, is_no_change: false, mine: false },
+    { id: 3, title: "A one-room mystery", summary: "Search a small room for clues to open the door.", credit: "the AI", votes: 2, is_no_change: false, mine: false },
+    { id: 4, title: "Change nothing this round", summary: null, credit: "the rules", votes: 0, is_no_change: true, mine: false },
+  ];
+  let voted = false;
   let buildChecks = 0;
   // Kept for the tab, so the preview stays joined between pages.
   let name = sessionStorage.getItem("preview-name") ?? "";
@@ -128,7 +105,8 @@ export function previewApi() {
     onAuthChange: () => {},
     isOwner: async () => signedIn,
     paused: async () => false,
-    currentBallot: async () => ballot,
+    board: async () => [...ideas].sort((a, b) => a.is_no_change - b.is_no_change || b.votes - a.votes),
+    round: async () => ({ round_number: 4, round_closes_at: closes, last_round_result: 'Round 3: "A pet follows you" won.' }),
     windowMinutes: async () => 1,
     // Add ?building to the address to preview the banner, or ?building=once to see it finish.
     async building() {
@@ -136,15 +114,15 @@ export function previewApi() {
       if (value === null || buildChecks++ > 0 && value === "once") return null;
       return { label: "A tiny tower climber" };
     },
-    myVote: async () => vote,
-    vote: async (_, option) => {
-      if (vote) ballot.results.find((r) => r.option_id === vote).votes--;
-      vote = option;
-      ballot.results.find((r) => r.option_id === option).votes++;
+    upvote: async (id) => {
+      const idea = ideas.find((i) => i.id === id);
+      idea.mine = !idea.mine;
+      idea.votes += idea.mine ? 1 : -1;
+      voted = true;
     },
     propose: async () => {},
     myName: async () => name,
-    myProgress: async () => ({ votes: vote ? 6 : 5, streak: vote ? 6 : 5, on_ballot: 1, built: 0, points: vote ? 11 : 10 }),
+    myProgress: async () => ({ votes: voted ? 6 : 5, streak: voted ? 6 : 5, on_ballot: 1, built: 0, points: voted ? 11 : 10 }),
     leaderboard: async () => [
       { name: "Dragon Fan", points: 46 },
       { name: "Moss", points: 12 },
@@ -152,11 +130,11 @@ export function previewApi() {
     exportData: async () => ({ player_id: "preview", username: "preview", public_name: name || null, suggestions: [], votes: [] }),
     deleteAccount: async () => {
       leave();
-      vote = null;
+      voted = false;
     },
     proposals: async () => [
       { id: 3, title: null, status: "pending", reason: null, credit: null, created_at: when(0.1) },
-      { id: 2, title: "Add a pet that follows you", status: "queued", reason: null, credit: "dragon_fan", created_at: when(1) },
+      { id: 2, title: "Add a pet that follows you", status: "on_ballot", reason: null, credit: "dragon_fan", created_at: when(1) },
       { id: 1, title: null, status: "rejected", reason: "Rule 9: the game can't collect personal information.", credit: null, created_at: when(3) },
     ],
     changes: async () => [
@@ -165,10 +143,10 @@ export function previewApi() {
       { id: 1, kind: "vote", version: "v1", credit: "the AI", title: "The first climb", notes: "The game begins with one tower and one jump.", created_at: when(9) },
     ],
     reviewQueue: async () => ({
-      ballots: [{ id: 9, question: "Should we make this change: Add a pet?", credit: "Dragon Fan", options: ballot.options.slice(0, 2) }],
+      ideas: [{ id: 9, title: "Add a pet", credit: "Dragon Fan", spec: spec("A small pet follows you.") }],
       proposals: [{ id: 7, body: "Make a screen where players enter their birthday", reason: "Rule 9 may apply." }],
     }),
-    reviewBallot: async () => {},
+    reviewIdea: async () => {},
     reviewProposal: async () => {},
     setPaused: async () => {},
     clearName: async () => {},
