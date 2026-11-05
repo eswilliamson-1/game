@@ -4,8 +4,9 @@ body { background: #14161a; color: #e9e6df; font: 16px/1.4 system-ui, sans-serif
 header { text-align: center; }
 h1 { font-size: 1.3rem; margin: 0; letter-spacing: 0.04em; }
 #goal { margin: 2px 0 6px; color: #c9c4b8; font-size: 0.9rem; }
-#hud { display: flex; justify-content: space-around; align-items: center; font-size: 0.95rem; color: #a9a59b; }
+#hud { display: flex; flex-wrap: wrap; gap: 4px 10px; justify-content: space-around; align-items: center; font-size: 0.95rem; color: #a9a59b; }
 #hud b { color: #fff; font-size: 1.1rem; margin-left: 4px; }
+#hud #streak { color: #78dcff; }
 #musicBtn { font: inherit; font-size: 0.8rem; font-weight: 700; padding: 3px 10px; border-radius: 8px; border: 1px solid #4a4f5c; background: #262a32; color: #e9e6df; cursor: pointer; touch-action: manipulation; }
 #stage { position: relative; flex: 1; min-height: 260px; border-radius: 12px; overflow: hidden; background: #1c1f25; }
 #board { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }

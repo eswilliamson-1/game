@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var GOAL = "Sort each shape into its matching bin before it reaches the end of the belt. Gold shapes are worth 3 points. Three mistakes ends the round. Walk your bot and turn the camera to look around.";
+  var GOAL = "Sort each shape into its matching bin before it reaches the end of the belt. Gold shapes are worth 3 points. Every 10 correct sorts in a row earns a +2 streak bonus. Three mistakes ends the round. Walk your bot and turn the camera to look around.";
   window.gameTest = { inputsHandled: 0, goal: GOAL };
 
   var music = window.TechnoMusic || { start: function () {}, stop: function () {}, tick: function () {}, setMuted: function () {}, isMuted: function () { return true; } };
@@ -13,6 +13,7 @@
   var scoreEl = document.getElementById("score");
   var bestEl = document.getElementById("best");
   var missEl = document.getElementById("miss");
+  var streakEl = document.getElementById("streak");
   var overlay = document.getElementById("overlay");
   var overlayTitle = document.getElementById("overlayTitle");
   var overlayText = document.getElementById("overlayText");
@@ -43,6 +44,7 @@
 
   var GOLD = "rgb(255,212,70)";
   var GOLD_CHANCE = 1 / 15;
+  var STREAK_EVERY = 10, STREAK_BONUS = 2;
 
   var SCALE = 2;
   var W = 300, H = 400;
@@ -79,6 +81,7 @@
 
   var state = "ready";
   var score = 0, best = 0, miss = 0;
+  var streak = 0, longest = 0, streakT = 0;
   var shape = null;
   var spawnDelay = 0;
   var fliers = [];
@@ -258,6 +261,7 @@
     scoreEl.textContent = String(score);
     bestEl.textContent = String(best);
     missEl.textContent = String(miss);
+    if (streakEl) streakEl.textContent = String(streak);
   }
 
   function spawn() {
@@ -279,6 +283,7 @@
 
   function startRound() {
     score = 0; miss = 0; shape = null; fliers = [];
+    streak = 0; longest = 0; streakT = 0;
     spawnDelay = 0.5; msg = ""; msgT = 0; flash = 0;
     lastType = -1; sameCount = 0;
     AV.pointT = 0; AV.hop = 0; AV.hurt = 0;
@@ -294,10 +299,11 @@
   function endRound() {
     state = "over";
     music.stop();
+    streakT = 0;
     if (score > best) best = score;
     updateHud();
     overlayTitle.textContent = "Round over";
-    overlayText.textContent = "You scored " + score + " points. Session best: " + best + ".";
+    overlayText.textContent = "You scored " + score + " points. Longest streak: " + longest + ". Session best: " + best + ".";
     startBtn.textContent = "Play again";
     overlay.classList.remove("hidden");
   }
@@ -311,6 +317,7 @@
 
   function mistake(text) {
     miss++;
+    streak = 0;
     AV.hurt = 1;
     showMsg(text, false, false);
     updateHud();
@@ -341,6 +348,12 @@
     spawnDelay = Math.max(0.08, 0.3 - score * 0.004);
     if (t.side === dir) {
       score += gold ? 3 : 1;
+      streak++;
+      if (streak > longest) longest = streak;
+      if (streak % STREAK_EVERY === 0) {
+        score += STREAK_BONUS;
+        streakT = 1.1;
+      }
       if (score > best) best = score;
       AV.hop = 1;
       showMsg(gold ? "+3" : "+1", true, gold);
@@ -438,6 +451,7 @@
     }
     if (flash > 0) flash = Math.max(0, flash - dt);
     if (msgT > 0) msgT = Math.max(0, msgT - dt);
+    if (streakT > 0) streakT = Math.max(0, streakT - dt);
     updateAvatar(dt);
   }
 
@@ -676,6 +690,28 @@
     }
   }
 
+  function drawStreakBadge() {
+    if (state !== "play") return;
+    var pw = 86, ph = 34, px = W - pw - 8, py = 8;
+    ctx.fillStyle = "rgba(12,13,16,0.6)";
+    ctx.fillRect(px, py, pw, ph);
+    ctx.fillStyle = "rgb(201,196,184)";
+    ctx.font = "bold 10px system-ui, sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText("STREAK", px + 8, py + 11);
+    ctx.fillStyle = streak > 0 ? "rgb(120,220,255)" : "rgb(160,160,160)";
+    ctx.font = "bold 15px system-ui, sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(String(streak), px + pw - 8, py + 12);
+    var bw = pw - 16;
+    var prog = (streak % STREAK_EVERY) / STREAK_EVERY;
+    ctx.fillStyle = "rgba(255,255,255,0.15)";
+    ctx.fillRect(px + 8, py + ph - 10, bw, 4);
+    ctx.fillStyle = "rgb(120,220,255)";
+    ctx.fillRect(px + 8, py + ph - 10, bw * prog, 4);
+  }
+
   function drawStick() {
     if (!stick) return;
     ctx.strokeStyle = "rgba(255,255,255,0.3)";
@@ -717,11 +753,13 @@
 
     drawStick();
     drawIncoming();
+    drawStreakBadge();
 
+    var fs;
     if (msgT > 0) {
       ctx.globalAlpha = Math.min(1, msgT * 2);
       ctx.fillStyle = msgColor;
-      var fs = Math.min(W, H) * (msgGold ? 0.11 : 0.08);
+      fs = Math.min(W, H) * (msgGold ? 0.11 : 0.08);
       ctx.font = "bold " + Math.round(fs) + "px system-ui, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
@@ -734,6 +772,22 @@
         ctx.shadowBlur = 0;
         ctx.shadowColor = "rgba(0,0,0,0)";
       }
+      ctx.globalAlpha = 1;
+    }
+
+    if (streakT > 0) {
+      var pop = 1 + Math.max(0, streakT - 0.9) * 1.5;
+      ctx.globalAlpha = Math.min(1, streakT * 2);
+      fs = Math.min(W, H) * 0.075 * pop;
+      ctx.font = "bold " + Math.round(fs) + "px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "rgb(120,220,255)";
+      ctx.shadowColor = "rgba(80,200,255,0.9)";
+      ctx.shadowBlur = fs * 0.4;
+      ctx.fillText("Streak! +" + STREAK_BONUS, W / 2, H * 0.21);
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = "rgba(0,0,0,0)";
       ctx.globalAlpha = 1;
     }
   }
