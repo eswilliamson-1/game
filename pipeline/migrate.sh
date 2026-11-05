@@ -5,7 +5,26 @@ set -euo pipefail
 # Files up to this one were run by hand before this script existed.
 BASELINE="0014_timer_and_spending.sql"
 
-run() { psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -X -q "$@"; }
+REF="$(echo "$SUPABASE_URL" | sed -E 's#https://([^.]+)\..*#\1#')"
+export PGPASSWORD="$SUPABASE_DB_PASSWORD" PGUSER="postgres.$REF" PGDATABASE=postgres PGPORT=5432 PGCONNECT_TIMEOUT=5
+
+# Supabase's connection address depends on the project's region, so find it.
+for region in us-east-1 us-east-2 us-west-1 us-west-2 ca-central-1 sa-east-1 eu-west-1 eu-west-2 eu-west-3 \
+  eu-central-1 eu-central-2 eu-north-1 ap-south-1 ap-southeast-1 ap-southeast-2 ap-northeast-1 ap-northeast-2; do
+  for prefix in aws-0 aws-1; do
+    host="$prefix-$region.pooler.supabase.com"
+    if psql -h "$host" -X -q -c "select 1" >/dev/null 2>&1; then
+      export PGHOST="$host"
+      break 2
+    fi
+  done
+done
+if [ -z "${PGHOST:-}" ]; then
+  echo "Couldn't connect. Check that SUPABASE_DB_PASSWORD matches the database password in Supabase."
+  exit 1
+fi
+
+run() { psql -v ON_ERROR_STOP=1 -X -q "$@"; }
 
 run -c "create table if not exists public.schema_migrations (
   name text primary key,
