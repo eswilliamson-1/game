@@ -85,6 +85,7 @@ before(async () => {
   await db.exec(readFileSync("supabase/migrations/0013_safe_updates.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0014_timer_and_spending.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0015_medium_needs_one.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0016_major_scales_down.sql", "utf8"));
   moved = (await db.query<{ title: string }>(`select title from ideas where not is_no_change`)).rows.map((r) => r.title);
 });
 
@@ -640,16 +641,26 @@ const sized = async (title: string, size: string) => {
   return id;
 };
 const need = async (id: number) => (await as("anon", "", `select need::int from board() where id = $1`, [id])).rows[0].need;
+const crowd = async (size: number) => {
+  await db.exec(`insert into auth.users (id) select ('20000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid from generate_series(1, ${size}) n`);
+  await db.exec(`insert into participation (round, user_id) select 1, id from auth.users where id::text like '20000000-%'`);
+};
+const noCrowd = () => db.exec(`delete from auth.users where id::text like '20000000-%'`);
 
 test("bigger ideas need more upvotes, scaled to active players", async () => {
   await reset();
   await release();
   const [s, m, l] = [await sized("S", "small"), await sized("M", "medium"), await sized("L", "major")];
-  assert.deepEqual([await need(s), await need(m), await need(l)], [1, 1, 3]);
-  await db.exec(`insert into auth.users (id) select ('20000000-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid from generate_series(1, 20) n`);
-  await db.exec(`insert into participation (round, user_id) select 1, id from auth.users where id::text like '20000000-%'`);
+  assert.deepEqual([await need(s), await need(m), await need(l)], [1, 1, 1]);
+  await crowd(2);
+  assert.deepEqual([await need(s), await need(m), await need(l)], [1, 1, 1]);
+  await noCrowd();
+  await crowd(5);
+  assert.deepEqual([await need(s), await need(m), await need(l)], [1, 2, 3]);
+  await noCrowd();
+  await crowd(20);
   assert.deepEqual([await need(s), await need(m), await need(l)], [1, 5, 10]);
-  await db.exec(`delete from auth.users where id::text like '20000000-%'`);
+  await noCrowd();
 });
 
 test("the first game needs only one upvote, whatever its size", async () => {
@@ -660,11 +671,13 @@ test("the first game needs only one upvote, whatever its size", async () => {
 test("an idea short of its target can't win, keeps its votes, and a smaller idea can win", async () => {
   await reset();
   await release();
+  await crowd(6);
   const [big, small] = [await sized("Big", "major"), await sized("Small", "small")];
   await up(ALICE, big);
   await up(BOB, big);
   await up(ALICE, small);
   const { build } = await endRound();
+  await noCrowd();
   assert.equal((await ballot(build[0])).question, "Small");
   assert.equal((await idea(big)).status, "open");
   const { rows } = await as("anon", "", `select votes::int from board() where id = $1`, [big]);
@@ -674,9 +687,11 @@ test("an idea short of its target can't win, keeps its votes, and a smaller idea
 test("if no idea reaches its target, nothing changes and the board says so", async () => {
   await reset();
   await release();
+  await crowd(6);
   const big = await sized("Big", "major");
   await up(ALICE, big);
   assert.deepEqual((await endRound()).build, []);
+  await noCrowd();
   assert.match((await round()).last_round_result, /no idea reached its upvote target/);
   assert.equal((await idea(big)).status, "open");
 });
@@ -684,8 +699,18 @@ test("if no idea reaches its target, nothing changes and the board says so", asy
 test("a major idea wins once it reaches its target", async () => {
   await reset();
   await release();
+  await crowd(3);
   const big = await sized("Big", "major");
   for (const uid of [ALICE, BOB, OWNER]) await up(uid, big);
+  assert.equal((await endRound()).build.length, 1);
+  await noCrowd();
+});
+
+test("a lone player can pass a major idea", async () => {
+  await reset();
+  await release();
+  const big = await sized("Big", "major");
+  await up(ALICE, big);
   assert.equal((await endRound()).build.length, 1);
 });
 
@@ -718,7 +743,7 @@ test("the winner stays on the board until the build ends, and can't be voted on"
 test("the owner sees spending and what's left, and nobody else can", async () => {
   await db.exec(`delete from ai_spend`);
   await user(OWNER, "select set_ai_credit(50)");
-  await db.exec(`insert into ai_spend (job, input_tokens, output_tokens, dollars) values ('plan', 1000, 1000, 2.5)`);
+  await db.exec(`insert into ai_spend (job, input_tokens, output_tokens, dollars, created_at) values ('plan', 1000, 1000, 2.5, now() + interval '1 second')`);
   const { rows } = await user(OWNER, "select spending_summary() as s");
   assert.equal(Number(rows[0].s.left), 47.5);
   assert.equal(Number(rows[0].s.today), 2.5);
