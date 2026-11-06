@@ -49,6 +49,8 @@ export function liveApi(url, key) {
     },
     upvote: async (idea) => must(await db.rpc("toggle_upvote", { p_idea: idea })),
     downvote: async (idea) => must(await db.rpc("toggle_downvote", { p_idea: idea })),
+    loadGameSave: async () => must(await db.rpc("load_game_save")),
+    storeGameSave: async (data) => must(await db.rpc("store_game_save", { p_data: data })),
     propose: async (body) => must(await db.rpc("submit_proposal", { p_body: body })),
     myName: async (userId) => must(await db.from("profiles").select("display_name").eq("user_id", userId).maybeSingle())?.display_name ?? "",
     myProgress: async () => must(await db.rpc("my_progress")),
@@ -135,6 +137,8 @@ export function previewApi() {
       idea.mine_down = !idea.mine_down;
       idea.downvotes = (idea.downvotes ?? 0) + (idea.mine_down ? 1 : -1);
     },
+    loadGameSave: async () => sessionStorage.getItem("preview-save"),
+    storeGameSave: async (data) => sessionStorage.setItem("preview-save", data),
     propose: async () => {},
     myName: async () => name,
     myProgress: async () => ({ votes: voted ? 6 : 5, streak: voted ? 6 : 5, on_ballot: 1, built: 0, points: voted ? 11 : 10 }),

@@ -297,6 +297,48 @@ test("the rules page lists all 17 rules and is linked from every page", async ()
   }
 });
 
+const askSite = (message: object) => {
+  const ask = (m: any) =>
+    new Promise((resolve) => {
+      const done = (value: unknown) => {
+        removeEventListener("message", listen);
+        resolve(value);
+      };
+      const listen = (event: MessageEvent) => event.data?.id === m.id && done(event.data.value);
+      addEventListener("message", listen);
+      setTimeout(() => done("no reply"), 7000);
+      parent.postMessage(m, "*");
+    });
+  return async (page: any) => page.frames().find((f: any) => f !== page.mainFrame()).evaluate(ask, message);
+};
+
+test("the game can save to the logged-in player's account, and only then", async () => {
+  const { page, errors } = await open("/");
+  await page.waitForSelector("iframe.game");
+  await page.waitForSelector("#board");
+  const store = askSite({ type: "game-save:store", id: 1, data: "progress" });
+  const load = askSite({ type: "game-save:load", id: 2 });
+  assert.equal(await store(page), false);
+  assert.equal(await load(page), null);
+  await logIn(page);
+  await page.waitForSelector("#level");
+  await page.waitForTimeout(300);
+  assert.equal(await store(page), true);
+  assert.equal(await load(page), "progress");
+  assert.equal(await askSite({ type: "game-save:store", id: 3, data: "x".repeat(32001) })(page), false);
+  assert.deepEqual(errors, []);
+});
+
+test("the site ignores save requests that don't come from the game", async () => {
+  const { page } = await open("/");
+  await page.waitForSelector("#board");
+  await logIn(page);
+  await page.waitForSelector("#level");
+  await page.evaluate(() => postMessage({ type: "game-save:store", id: 9, data: "forged" }, "*"));
+  await page.waitForTimeout(6000);
+  assert.equal(await page.evaluate(() => sessionStorage.getItem("preview-save")), null);
+});
+
 test("the game runs in a sandboxed frame", async () => {
   const { page } = await open("/");
   const sandbox = await page.locator("iframe.game").getAttribute("sandbox");

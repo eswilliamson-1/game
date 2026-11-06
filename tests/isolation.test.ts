@@ -19,6 +19,12 @@ test("the host config matches the configured hosts", () => {
   assert.ok(htaccess.includes(settings.hosts.game.replaceAll(".", "\\.")));
 });
 
+test("the account save file only talks to the voting site", () => {
+  const file = readFileSync("sandbox-host/account-save.js", "utf8");
+  assert.ok(file.includes(`"https://${settings.hosts.vote}"`));
+  assert.ok(!file.includes('"*"'));
+});
+
 test("the policy blocks the network and keeps the sandbox", () => {
   assert.ok(policy.includes("connect-src 'none'"));
   assert.ok(policy.includes("default-src 'none'"));

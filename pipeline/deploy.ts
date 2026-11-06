@@ -60,10 +60,13 @@ async function deployGame(dir: string, version: string) {
     const root = await ftp.pwd();
     await ftp.uploadFrom("sandbox-host/.htaccess", ".htaccess");
     // The archive copy goes first, so a failed upload can't touch the live game.
+    // The save file goes last each time, so a game file can never replace it.
     await ftp.ensureDir(`${root}/${version}`);
     await ftp.uploadFromDir(dir);
+    await ftp.uploadFrom("sandbox-host/account-save.js", "account-save.js");
     await ftp.cd(root);
     await ftp.uploadFromDir(dir);
+    await ftp.uploadFrom("sandbox-host/account-save.js", "account-save.js");
   });
   console.log(`Published ${version}.`);
 }

@@ -28,6 +28,9 @@ export async function verifyLive(): Promise<Check[]> {
   const game = await get(`https://${settings.hosts.game}/`);
   checks.push({ name: "Game host responds", ok: game.status === 200, detail: `status ${game.status}` });
   checks.push(checkPolicy("Game security policy", game.headers.get("content-security-policy"), expected));
+  const saveFile = await (await get(`https://${settings.hosts.game}/account-save.js`)).text();
+  const sameFile = saveFile.replaceAll("\r", "") === readFileSync("sandbox-host/account-save.js", "utf8").replaceAll("\r", "");
+  checks.push({ name: "Account save file is unchanged", ok: sameFile, detail: sameFile ? "matches" : "differs from the repo" });
   const vote = await get(`https://${settings.hosts.vote}/`);
   const frameBlocked = (vote.headers.get("content-security-policy") ?? "").includes("frame-ancestors 'none'");
   checks.push({ name: "Voting site can't be framed", ok: frameBlocked, detail: frameBlocked ? "blocked" : "no frame-ancestors policy" });

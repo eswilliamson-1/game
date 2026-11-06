@@ -1,6 +1,7 @@
 // Runs in GitHub Actions with no secrets at all, because this is the only step
 // that executes generated code.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { chromium, type CDPSession, type Page } from "playwright";
 import settings from "../config/settings.json" with { type: "json" };
 import { readGame } from "./lib/files.ts";
@@ -160,6 +161,7 @@ export async function checkGame(dir: string, seconds = settings.performance.play
   const result: CheckResult = { ok: false, failures: [], metrics: {} };
   for (const v of scanFiles(readGame(dir))) result.failures.push(`scan: ${v.path}: ${v.problem}`);
   if (result.failures.length === 0) {
+    copyFileSync("sandbox-host/account-save.js", join(dir, "account-save.js"));
     const server = await serve(dir, PORT, { "Content-Security-Policy": GAME_CSP });
     try {
       for (const device of DEVICES) await testDevice(`http://127.0.0.1:${PORT}/`, device, seconds, result);

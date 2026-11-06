@@ -91,6 +91,7 @@ before(async () => {
   await db.exec(readFileSync("supabase/migrations/0019_more_daily_suggestions.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0020_downvotes_and_expiry.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0021_leaderboard_details.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0022_account_saves.sql", "utf8"));
   moved = (await db.query<{ title: string }>(`select title from ideas where not is_no_change`)).rows.map((r) => r.title);
 });
 
@@ -801,6 +802,44 @@ test("a suggestion with no recent upvotes leaves the board, and others stay", as
   await db.query(`update upvotes set created_at = now() - interval '4 days' where idea_id = $1`, [backed.id]);
   await db.query(`select expire_ideas()`);
   assert.equal((await idea(backed.id)).status, "rejected");
+});
+
+const loadSave = async (uid: string) => (await user(uid, `select load_game_save() as data`)).rows[0].data;
+const storeSave = async (uid: string, data: string) => (await user(uid, `select store_game_save($1) as ok`, [data])).rows[0].ok;
+
+test("each player has their own game save, and nobody else can reach it", async () => {
+  await db.exec(`delete from game_saves`);
+  assert.equal(await loadSave(ALICE), null);
+  assert.equal(await storeSave(ALICE, "alice's progress"), true);
+  assert.equal(await storeSave(BOB, "bob's progress"), true);
+  assert.equal(await loadSave(ALICE), "alice's progress");
+  assert.equal(await loadSave(BOB), "bob's progress");
+  await assert.rejects(as("anon", "", `select load_game_save()`));
+  await assert.rejects(as("anon", "", `select store_game_save('x')`));
+  await assert.rejects(as("anon", "", `select * from game_saves`));
+  await assert.rejects(user(ALICE, `select * from game_saves`));
+  await assert.rejects(user(ALICE, `update game_saves set data = 'x'`));
+});
+
+test("a game save has a size limit, and rapid writes are ignored", async () => {
+  await db.exec(`delete from game_saves`);
+  await assert.rejects(storeSave(ALICE, "x".repeat(32001)), /too large/);
+  assert.equal(await storeSave(ALICE, "x".repeat(32000)), true);
+  assert.equal(await storeSave(ALICE, "too soon"), false);
+  await db.exec(`update game_saves set updated_at = now() - interval '3 seconds'`);
+  assert.equal(await storeSave(ALICE, "later"), true);
+  assert.equal(await loadSave(ALICE), "later");
+});
+
+test("a game save is in the data export, and goes with the account", async () => {
+  await db.exec(`delete from game_saves`);
+  await storeSave(ALICE, "exported");
+  const { rows } = await user(ALICE, `select export_my_data() as d`);
+  assert.equal(rows[0].d.game_save, "exported");
+  await db.exec(`insert into auth.users (id) values ('30000000-0000-0000-0000-000000000001')`);
+  await user("30000000-0000-0000-0000-000000000001", `select store_game_save('gone soon')`);
+  await db.exec(`delete from auth.users where id = '30000000-0000-0000-0000-000000000001'`);
+  assert.equal((await db.query(`select 1 from game_saves where user_id = '30000000-0000-0000-0000-000000000001'`)).rows.length, 0);
 });
 
 test("only the owner can change an idea's size", async () => {

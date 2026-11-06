@@ -98,7 +98,8 @@ Technical limits, enforced by an automated scan and a browser security policy. A
 - No text inputs, forms, editable text, or browser dialogs. Buttons, canvas, keyboard, and pointer input are fine, and so is requestPointerLock for mouse look.
 - No dynamic code, encoded strings, or raw HTML injection. Build DOM with createElement and textContent.
 - No Date or Intl. Use performance.now for timing, so behavior can't depend on the calendar.
-- Saves use localStorage only. Don't read anything about the player or their device.
+- Saves use localStorage, which stays in one browser. Don't read anything about the player or their device.
+- To also keep progress on a logged-in player's account, add <script src="account-save.js"></script> to index.html before your own script, and use window.gameSave. load() resolves to the saved text or null, and store(text) resolves to true or false. They can be slow or unavailable, so never wait for them before the game starts, and keep localStorage working. Saves are text up to 32000 characters. Parse them defensively, and store at milestones, never every frame. Never create a file named account-save.js.
 - Total size under ${Math.floor(settings.performance.maxDownloadBytes / 1048576)} MB, and it must run well on a mid-range phone.
 - The game runs in a frame that fills most of the screen. Its play area must use all the width and height it can, with no fixed maximum size, on both large screens and phones.
 

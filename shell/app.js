@@ -1,4 +1,5 @@
 import { liveApi, previewApi } from "./api.js";
+import { startSaveBridge } from "./save-bridge.js";
 
 const config = globalThis.__CONFIG__;
 const api = config.supabaseUrl ? liveApi(config.supabaseUrl, config.supabaseKey) : previewApi();
@@ -606,6 +607,7 @@ if (api.preview) {
 }
 api.onAuthChange(refresh);
 refresh();
+startSaveBridge(api, config.gameUrl, config.maxSaveChars);
 // Pages with forms of their own, like Review, are left alone.
 const LIVE_PAGES = { home: updateHome, leaderboard: renderLeaderboard, notes: renderNotes, suggestions: renderSuggestions };
 

@@ -6,7 +6,7 @@
 4. **Automatic builds:** after voting closes, the winning change is built, tested, published, and added to the public patch notes, with credit to whoever suggested it.
 5. **Incremental changes:** the game grows one step at a time. Each idea is rated small, medium, or major, and bigger changes need more upvotes, scaled to the number of active players. Oversized proposals are cut down to a first step.
 6. **Destructive changes are allowed:** but from its first release, the game must always stay playable and performant. A release that fails these tests doesn't go live.
-7. **Contained:** the AI and the game can't affect any other part of the website.
+7. **Contained:** the AI and the game can't affect any other part of the website. The game's one link to the site is a small save on a logged-in player's account, and the game is never told who the player is.
 8. **Off-limits content:** no hate speech, sexual content, copyrighted characters or other protected material, or anything illegal.
 9. **Player safety:** the game can't collect passwords or personal information, impersonate anyone, send players elsewhere, or trick them.
 10. **Failed builds:** a failed change gets one repair attempt. If that fails, it's dropped with a published reason, and the previous version stays live.

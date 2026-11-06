@@ -55,6 +55,7 @@ function privacyHtml(): string {
       <li><strong>Your suggestions.</strong> The owner can read them. The public suggestions page lists when each one arrived and its status, and adds an AI-written summary and your username once it passes screening. Your original text is never public.</li>
       <li><strong>Public credit.</strong> Your username is shown when a suggestion of yours reaches the idea board or the patch notes, and on the leaderboard with your points, level, rounds played, voting streak, how many of your ideas reached the board or were built, and your latest built idea.</li>
       <li><strong>Your points, level, and badges</strong>, worked out from the activity above.</li>
+      <li><strong>Your game save.</strong> When you're logged in, the game can keep a small save of your progress on your account, so it follows you between devices. It holds game progress only, is included in your data download, and is deleted with your account.</li>
       <li><strong>Technical logs</strong>, including IP addresses, kept by our hosting and database providers for security.</li>
     </ul>
     <p>Suggestions that contain an email address or phone number are refused. Please leave out other personal details too.</p>
@@ -140,6 +141,7 @@ await build({
       supabaseKey,
       gameUrl,
       maxProposalChars: settings.proposal.maxChars,
+      maxSaveChars: 32000,
     }),
   },
 });
@@ -166,6 +168,7 @@ cpSync("shell/style.css", `${OUT}/style.css`);
 
 if (preview) {
   cpSync("game", `${OUT}/preview-game`, { recursive: true });
+  cpSync("sandbox-host/account-save.js", `${OUT}/preview-game/account-save.js`);
 } else {
   const supabase = new URL(supabaseUrl).origin;
   const csp = `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src ${supabase} ${supabase.replace("https:", "wss:")}; frame-src https://${settings.hosts.game}; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`;

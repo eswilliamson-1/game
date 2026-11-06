@@ -131,6 +131,7 @@ export function scanFiles(files: GameFile[]): Violation[] {
   for (const file of files) {
     const pathCheck = safeGamePath(file.path);
     if (!pathCheck.ok) add(file.path, pathCheck.reason);
+    if (file.path.toLowerCase().endsWith("account-save.js")) add(file.path, "replaces the account save file");
     if (HIDDEN.test(file.content.replace(/[\r\n\t]/g, " "))) add(file.path, "hidden characters");
 
     const isHtml = file.path.endsWith(".html") || file.path.endsWith(".svg");
