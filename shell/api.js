@@ -63,9 +63,15 @@ export function liveApi(url, key) {
       room.on("broadcast", { event: "move" }, ({ payload }) => onMove(payload));
       room.on("presence", { event: "sync" }, () => onCount(Object.keys(room.presenceState()).length - 1));
       room.on("presence", { event: "leave" }, ({ key }) => onLeave(key));
-      await new Promise((resolve, reject) => {
-        room.subscribe((status) => (status === "SUBSCRIBED" ? resolve() : status !== "CLOSED" && reject(new Error(status))));
+      // The first join after a quiet spell can be refused, and the client retries it.
+      const opened = await new Promise((resolve) => {
+        room.subscribe((status) => status === "SUBSCRIBED" && resolve(true));
+        setTimeout(() => resolve(false), 15_000);
       });
+      if (!opened) {
+        await db.removeChannel(room);
+        throw new Error("The live room didn't open.");
+      }
       await room.track({});
       return {
         send: (move) => room.send({ type: "broadcast", event: "move", payload: { ...move, from } }),

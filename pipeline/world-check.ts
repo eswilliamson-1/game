@@ -28,12 +28,15 @@ async function player() {
   return client;
 }
 
+// The client retries a refused join, so only the state after a while counts.
 const joined = (channel: RealtimeChannel) =>
   new Promise<string>((resolve) => {
-    channel.subscribe((status) => {
-      if (status !== "CLOSED") resolve(status);
+    const seen: string[] = [];
+    channel.subscribe((status, error) => {
+      seen.push(error ? `${status}: ${error.message}` : status);
+      if (status === "SUBSCRIBED") resolve(status);
     });
-    setTimeout(() => resolve("no answer"), 10_000);
+    setTimeout(() => resolve(seen.join(" | ") || "no answer"), 15_000);
   });
 
 const room = (client: SupabaseClient, heard: unknown[], isPrivate = true) =>
