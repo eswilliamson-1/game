@@ -1,11 +1,12 @@
 (function () {
   "use strict";
 
-  var GOAL = "Explore Mossvale: find the old cottage, the pond, and the rocky ridge. Equip your pistol (G or the Pistol button) to blast trees out of your way. Press I or the Inventory button to see what you carry.";
+  var GOAL = "Explore Mossvale: find the old cottage, the pond, and the rocky ridge, and work your way around the roaring datacenter in the middle. Equip your pistol (G or the Pistol button) to blast trees out of your way. Press I or the Inventory button to see what you carry.";
   window.gameTest = { inputsHandled: 0, goal: GOAL };
 
-  var music = window.TechnoMusic || { start: function () {}, stop: function () {}, tick: function () {}, setMuted: function () {}, isMuted: function () { return true; }, sfx: function () {} };
+  var music = window.TechnoMusic || { start: function () {}, stop: function () {}, tick: function () {}, setMuted: function () {}, isMuted: function () { return true; }, sfx: function () {}, setHum: function () {} };
   if (typeof music.sfx !== "function") music.sfx = function () {};
+  if (typeof music.setHum !== "function") music.setHum = function () {};
 
   var canvas = document.getElementById("board");
   var ctx = canvas.getContext("2d");
@@ -139,6 +140,10 @@
   var AV_BODY = [150, 122, 215], AV_HEAD = [226, 222, 210], AV_DARK = [34, 38, 50];
   var AV_EYE = [120, 230, 255], AV_LEG = [84, 90, 108], AV_GOLD = [255, 212, 70];
   var GUN_DARK = [58, 62, 70], GUN_GRIP = [96, 74, 54];
+  var DC_WALL = [176, 180, 186], DC_WALL2 = [160, 166, 174], DC_TRIM = [64, 70, 80], DC_STRIPE = [226, 190, 60];
+  var DC_GLASS = [30, 40, 54], DC_LED_G = [110, 255, 150], DC_LED_B = [110, 190, 255], DC_LED_OFF = [44, 60, 70];
+  var DC_DOOR = [90, 98, 110], DC_VENT = [48, 52, 60], DC_BLADE = [150, 156, 164];
+  var DC_UNIT = [196, 200, 204], DC_UNIT_TOP = [170, 176, 182], DC_FAN = [56, 60, 66], DC_PAD = [146, 148, 144];
 
   // ---- deterministic random so the world is always the same ----
   var seed = 20240611;
@@ -164,7 +169,16 @@
   var POND = { x: -15, z: 13, r: 5.6 };
   function pondR(a) { return POND.r + 0.7 * Math.sin(3 * a + 0.5) + 0.4 * Math.sin(5 * a + 1.3); }
   var HUT = { x: 8, z: 9, hx: 2.4, hz: 2, h: 1.7 };
-  var SIGN = { x: 2, z: -1 };
+  var SIGN = { x: 1.8, z: -4 };
+
+  // the datacenter: a big, noisy block right in the middle of the valley
+  var DC = { x: 0, z: 0.5, hx: 4.5, hz: 3, h: 5 };
+  var DC_R = { x0: DC.x - DC.hx, x1: DC.x + DC.hx, z0: DC.z - DC.hz, z1: DC.z + DC.hz };
+  var DC_UNITS = [[-2.8, DC.z + 0.6], [0, DC.z + 0.6], [2.8, DC.z + 0.6]];
+  var DC_N = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+  var DC_HALF = [DC.hx, DC.hx, DC.hz, DC.hz];
+  var DC_YAW = [Math.PI, 0, -Math.PI / 2, Math.PI / 2];
+  var dcPuffT = 0;
 
   var RECTS = [], CIRCS = [], TREES = [], ROCKS = [], RIDGE = [], WALLS = [];
   var BLOCKERS = [];
@@ -192,6 +206,8 @@
     dx = x - POND.x; dz = z - POND.z;
     if (Math.sqrt(dx * dx + dz * dz) < POND.r + 1.8 + m) return false;
     if (x > HUT.x - HUT.hx - m - 1 && x < HUT.x + HUT.hx + m + 1 && z > HUT.z - HUT.hz - m - 1.5 && z < HUT.z + HUT.hz + m + 1) return false;
+    // keep a walkable lane all the way around the datacenter
+    if (x > DC_R.x0 - m - 1.5 && x < DC_R.x1 + m + 1.5 && z > DC_R.z0 - m - 1.5 && z < DC_R.z1 + m + 1.5) return false;
     dx = x - SIGN.x; dz = z - SIGN.z;
     if (dx * dx + dz * dz < (1.5 + m) * (1.5 + m)) return false;
     dx = x - START_X; dz = z - START_Z;
@@ -218,6 +234,8 @@
     rc = { x0: HUT.x - HUT.hx, x1: HUT.x + HUT.hx, z0: HUT.z - HUT.hz, z1: HUT.z + HUT.hz };
     RECTS.push(rc);
     BLOCKERS.push(rc);
+    RECTS.push(DC_R);
+    BLOCKERS.push(DC_R);
     CIRCS.push({ x: SIGN.x, z: SIGN.z, r: 0.2 });
 
     // rocky ridge with a narrow pass through the middle
@@ -290,6 +308,10 @@
       GROUND.push({ pts: [[p[0] + nx, y, p[1] + nz], [p[2] + nx, y, p[3] + nz], [p[2] - nx, y, p[3] - nz], [p[0] - nx, y, p[1] - nz]], col: PATH_COL, a: 1, x: (p[0] + p[2]) / 2, z: (p[1] + p[3]) / 2, r: 0 });
       GROUND.push({ pts: blobPts(p[2], p[3], PATH_HW, 10, 0.009, 0), col: PATH_COL, a: 1, x: p[2], z: p[3], r: 1 });
     }
+
+    // concrete pad under the datacenter (covers where the old paths met)
+    var pm = 1.3, py = 0.011;
+    GROUND.push({ pts: [[DC_R.x0 - pm, py, DC_R.z0 - pm], [DC_R.x1 + pm, py, DC_R.z0 - pm], [DC_R.x1 + pm, py, DC_R.z1 + pm], [DC_R.x0 - pm, py, DC_R.z1 + pm]], col: DC_PAD, a: 1, x: DC.x, z: DC.z, r: 0 });
 
     // pond: sandy shore then water
     var shore = [];
@@ -414,7 +436,7 @@
     var gone = [];
     for (var i = 0; i < ALL_TREES.length; i++) if (ALL_TREES[i].gone) gone.push(ALL_TREES[i].id);
     try {
-      localStorage.setItem(PROGRESS_KEY, JSON.stringify({ v: 1, cleared: cleared, wood: woodCount(), gone: gone }));
+      localStorage.setItem(PROGRESS_KEY, JSON.stringify({ v: 2, cleared: cleared, wood: woodCount(), gone: gone }));
     } catch (e) { /* storage unavailable: play on without saving */ }
   }
 
@@ -443,9 +465,10 @@
     if (typeof text !== "string" || !text || text.length > 32000) return false;
     var d;
     try { d = JSON.parse(text); } catch (e) { return false; }
-    if (!d || typeof d !== "object" || d.v !== 1) return false;
+    if (!d || typeof d !== "object" || (d.v !== 1 && d.v !== 2)) return false;
     var any = false;
-    if (Array.isArray(d.gone)) {
+    // older saves were made before the datacenter moved in and the trees shifted, so only their counts carry over
+    if (d.v === 2 && Array.isArray(d.gone)) {
       for (var i = 0; i < d.gone.length && i < 1000; i++) {
         var id = d.gone[i];
         if (typeof id !== "number" || id !== Math.floor(id) || id < 0 || id >= ALL_TREES.length) continue;
@@ -589,7 +612,7 @@
     addBoxVerts(list, v, col, topCol, bias);
   }
 
-  function botBox(list, g, cx, cy, cz, hx, hy, hz, col, px, py, rz, rx) {
+  function botBox(list, g, cx, cy, cz, hx, hy, hz, col, px, py, rz, rx, bias) {
     var v = [];
     var cr = Math.cos(rz || 0), sr = Math.sin(rz || 0);
     var cxr = Math.cos(rx || 0), sxr = Math.sin(rx || 0);
@@ -612,7 +635,7 @@
       y += g.oy;
       v.push([g.px + x * g.c + z * g.s, y, g.pz - x * g.s + z * g.c]);
     }
-    addBoxVerts(list, v, col, null);
+    addBoxVerts(list, v, col, null, bias);
   }
 
   function addTextBB(list, text, x, y, z, size, color) {
@@ -683,6 +706,7 @@
     overlay.classList.add("hidden");
     startBtn.blur();
     music.start();
+    music.setHum(dcNoise());
   }
 
   // ---- pistol ----
@@ -885,6 +909,24 @@
     player.walkAmt += ((moving ? m : 0) - player.walkAmt) * Math.min(1, dt * 10);
   }
 
+  // how loud the datacenter is where the player stands (never fully silent)
+  function dcNoise() {
+    var dx = Math.max(DC_R.x0 - player.x, 0, player.x - DC_R.x1);
+    var dz = Math.max(DC_R.z0 - player.z, 0, player.z - DC_R.z1);
+    var d = Math.sqrt(dx * dx + dz * dz);
+    var near = Math.max(0, 1 - d / 26);
+    return 0.2 + 0.8 * near * near;
+  }
+
+  function updateDatacenter(dt) {
+    dcPuffT -= dt;
+    if (dcPuffT <= 0) {
+      dcPuffT = 0.3;
+      var u = DC_UNITS[Math.floor(Math.random() * DC_UNITS.length) % DC_UNITS.length];
+      FX.push({ x: u[0] + (Math.random() - 0.5) * 0.6, y: DC.h + 1.1, z: u[1] + (Math.random() - 0.5) * 0.5, t: 0, dur: 2.2, r0: 0.35, r1: 1.3, kind: 4 });
+    }
+  }
+
   function updateEffects(dt) {
     var i;
     if (gunCool > 0) gunCool -= dt;
@@ -914,8 +956,12 @@
 
   function update(dt) {
     glowT += dt;
-    if (state === "play") updateMovement(dt);
+    if (state === "play") {
+      updateMovement(dt);
+      music.setHum(dcNoise());
+    }
     updateEffects(dt);
+    updateDatacenter(dt);
     if (gunOn) castAim();
   }
 
@@ -1026,6 +1072,89 @@
     addBoxW(list, h.x + 1.45, 1.0, fz - 0.03, 0.35, 0.28, 0.03, HUT_WIN, null, 0.85);
   }
 
+  // ---- datacenter drawing ----
+  // side: 0 south, 1 north, 2 west, 3 east; u runs along the wall, out away from it
+  function dcPos(side, u, out) {
+    if (side === 0) return [DC.x + u, DC_R.z0 - out];
+    if (side === 1) return [DC.x - u, DC_R.z1 + out];
+    if (side === 2) return [DC_R.x0 - out, DC.z - u];
+    return [DC_R.x1 + out, DC.z + u];
+  }
+
+  function dcSideVisible(side) {
+    if (side === 0) return cam.z < DC_R.z0;
+    if (side === 1) return cam.z > DC_R.z1;
+    if (side === 2) return cam.x < DC_R.x0;
+    return cam.x > DC_R.x1;
+  }
+
+  function dcBox(list, side, u, y, out, hu, hy, ho, col, bias) {
+    var p = dcPos(side, u, out);
+    if (side < 2) addBoxW(list, p[0], y, p[1], hu, hy, ho, col, null, bias);
+    else addBoxW(list, p[0], y, p[1], ho, hy, hu, col, null, bias);
+  }
+
+  function dcRack(list, side, u, idx) {
+    dcBox(list, side, u, 2.1, 0.03, 0.45, 1.3, 0.03, DC_GLASS, 0.88);
+    for (var r = 0; r < 4; r++) {
+      for (var c = 0; c < 2; c++) {
+        var k = idx * 7 + r * 3 + c;
+        var lit = Math.sin(glowT * (2.3 + (k % 5) * 0.9) + idx * 1.7 + r * 2.1 + c) > 0.1;
+        var col = lit ? ((r + c) % 3 === 0 ? DC_LED_B : DC_LED_G) : DC_LED_OFF;
+        dcBox(list, side, u - 0.18 + c * 0.36, 1.2 + r * 0.6, 0.07, 0.07, 0.05, 0.02, col, 0.82);
+      }
+    }
+  }
+
+  function dcFan(list, side, u, idx) {
+    var fy = 2.8;
+    dcBox(list, side, u, fy, 0.05, 1.0, 1.0, 0.05, DC_VENT, 0.88);
+    var p = dcPos(side, u, 0.12);
+    var g = { px: p[0], pz: p[1], c: Math.cos(DC_YAW[side]), s: Math.sin(DC_YAW[side]), oy: 0 };
+    var a = glowT * 14 + idx * 0.7;
+    botBox(list, g, 0, fy, 0, 0.85, 0.09, 0.025, DC_BLADE, 0, fy, a, 0, 0.8);
+    botBox(list, g, 0, fy, 0, 0.85, 0.09, 0.025, DC_BLADE, 0, fy, a + Math.PI / 2, 0, 0.8);
+    botBox(list, g, 0, fy, 0.03, 0.14, 0.14, 0.03, DC_TRIM, 0, fy, 0, 0, 0.78);
+  }
+
+  function addDatacenter(list) {
+    var h = DC.h, side, i, row;
+    for (side = 0; side < 4; side++) {
+      if (!dcSideVisible(side)) continue;
+      var L = DC_HALF[side], n = side < 2 ? 6 : 4, seg = 2 * L / n, nr = DC_N[side];
+      for (i = 0; i < n; i++) {
+        var ua = -L + i * seg, ub = ua + seg;
+        var pa = dcPos(side, ua, 0), pb = dcPos(side, ub, 0);
+        var col = i % 2 ? DC_WALL2 : DC_WALL;
+        for (row = 0; row < 2; row++) {
+          var ya = row * h / 2, yb = ya + h / 2;
+          addFace(list, [pa[0], ya, pa[1]], [pb[0], ya, pb[1]], [pb[0], yb, pb[1]], [pa[0], yb, pa[1]], nr[0], 0, nr[1], col, 1.08);
+        }
+      }
+      dcBox(list, side, 0, h - 0.15, 0.03, L, 0.15, 0.03, DC_TRIM, 0.9);
+      dcBox(list, side, 0, 0.15, 0.03, L, 0.15, 0.03, DC_STRIPE, 0.9);
+      if (side === 0) {
+        dcBox(list, side, 0, 1.2, 0.04, 0.8, 1.2, 0.04, DC_DOOR, 0.88);
+        dcBox(list, side, 0, h - 0.8, 0.04, 2.4, 0.38, 0.04, DC_TRIM, 0.93);
+        addTextBB(list, "DATACENTER", DC.x, h - 0.8, DC_R.z0 - 0.12, 0.42, "rgb(120,230,255)");
+        dcRack(list, side, -3.6, 0); dcRack(list, side, -2.3, 1);
+        dcRack(list, side, 2.3, 2); dcRack(list, side, 3.6, 3);
+      } else if (side === 1) {
+        dcRack(list, side, -3.0, 4); dcRack(list, side, -1.2, 5);
+        dcRack(list, side, 1.2, 6); dcRack(list, side, 3.0, 7);
+      } else {
+        dcFan(list, side, -1.4, side * 2);
+        dcFan(list, side, 1.4, side * 2 + 1);
+      }
+    }
+    // rooftop cooling units
+    for (i = 0; i < DC_UNITS.length; i++) {
+      var u = DC_UNITS[i];
+      addBoxW(list, u[0], h + 0.45, u[1], 1.0, 0.45, 1.1, DC_UNIT, DC_UNIT_TOP);
+      addBoxW(list, u[0], h + 1.0, u[1], 0.32, 0.12, 0.32, DC_FAN);
+    }
+  }
+
   function addParticles(list) {
     for (var i = 0; i < PARTS.length; i++) {
       var p = PARTS[i];
@@ -1040,7 +1169,7 @@
       var f = FX[i];
       if (f.t < 0) continue;
       var p = f.t / f.dur;
-      var y = f.y + (f.kind === 2 ? p * 2.2 : 0);
+      var y = f.y + (f.kind === 2 ? p * 2.2 : (f.kind === 4 ? p * 3 : 0));
       var cp = toCam(f.x, y, f.z);
       if (cp[2] < NEAR + 0.05) continue;
       var s = cam.f / cp[2];
@@ -1056,6 +1185,9 @@
         col = "rgba(255," + Math.round(220 - 160 * p) + "," + Math.round(120 - 100 * p) + "," + a + ")";
         list.push({ k: 3, sx: sx, sy: sy, r: r, col: col, d: d * 0.97 });
         list.push({ k: 3, sx: sx, sy: sy, r: r * 0.55 * (1 - p * 0.6), col: "rgba(255,250,210," + a + ")", d: d * 0.96 });
+      } else if (f.kind === 4) {
+        col = "rgba(236,240,244," + (0.45 * (1 - p)).toFixed(2) + ")";
+        list.push({ k: 3, sx: sx, sy: sy, r: r, col: col, d: d * 0.99 });
       } else {
         col = "rgba(84,80,74," + (0.45 * (1 - p)).toFixed(2) + ")";
         list.push({ k: 3, sx: sx, sy: sy, r: r, col: col, d: d * 0.98 });
@@ -1078,6 +1210,7 @@
       c = WALLS[i];
       addBoxW(list, c[0], c[3], c[1], c[2], c[3], c[4], STONE, STONE_TOP);
     }
+    addDatacenter(list);
     addHut(list);
     addBoxW(list, SIGN.x, 0.7, SIGN.z, 0.08, 0.7, 0.08, WOOD);
     addBoxW(list, SIGN.x, 1.35, SIGN.z, 0.75, 0.25, 0.05, WOOD);

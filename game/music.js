@@ -5,7 +5,7 @@
   // No audio files are used: every kick, hat, bass note and stab is generated here.
 
   var AC = window.AudioContext || window.webkitAudioContext;
-  var ctx = null, master = null, noiseBuf = null, sfxGain = null;
+  var ctx = null, master = null, noiseBuf = null, sfxGain = null, bus = null;
   var playing = false, muted = false;
   var BPM = 128;
   var STEP = 60 / BPM / 4; // sixteenth note
@@ -13,6 +13,10 @@
   var step = 0, nextTime = 0;
   var VOLUME = 0.5;
   var KEY = "signalSorterMusicMuted";
+
+  // datacenter hum (separate from the music, always running while playing)
+  var humGain = null, humLevel = 0.3, humSent = -1;
+  var HUM_VOL = 0.5;
 
   try { muted = localStorage.getItem(KEY) === "1"; } catch (e) { muted = false; }
 
@@ -33,6 +37,7 @@
     comp.ratio.value = 4;
     comp.attack.value = 0.003;
     comp.release.value = 0.15;
+    bus = comp;
     master = ctx.createGain();
     master.gain.value = 0;
     master.connect(comp);
@@ -146,6 +151,79 @@
     }
   }
 
+  // ---- datacenter hum: fan roar, air hiss, electrical buzz, wavering whine ----
+  function startHum() {
+    if (humGain || !ctx) return;
+    try {
+      humGain = ctx.createGain();
+      humGain.gain.value = 0;
+      humGain.connect(bus);
+
+      var src = ctx.createBufferSource();
+      src.buffer = noiseBuf;
+      src.loop = true;
+
+      var lp = ctx.createBiquadFilter();
+      lp.type = "lowpass"; lp.frequency.value = 650; lp.Q.value = 0.7;
+      var roar = ctx.createGain();
+      roar.gain.value = 0.6;
+      src.connect(lp); lp.connect(roar); roar.connect(humGain);
+
+      var bp = ctx.createBiquadFilter();
+      bp.type = "bandpass"; bp.frequency.value = 3300; bp.Q.value = 9;
+      var hiss = ctx.createGain();
+      hiss.gain.value = 0.35;
+      src.connect(bp); bp.connect(hiss); hiss.connect(humGain);
+
+      var o1 = ctx.createOscillator();
+      o1.type = "sawtooth"; o1.frequency.value = 60;
+      var lp2 = ctx.createBiquadFilter();
+      lp2.type = "lowpass"; lp2.frequency.value = 300;
+      var buzz = ctx.createGain();
+      buzz.gain.value = 0.16;
+      o1.connect(lp2); lp2.connect(buzz); buzz.connect(humGain);
+
+      var o2 = ctx.createOscillator();
+      o2.type = "sine"; o2.frequency.value = 120;
+      var drone = ctx.createGain();
+      drone.gain.value = 0.12;
+      o2.connect(drone); drone.connect(humGain);
+
+      var o3 = ctx.createOscillator();
+      o3.type = "triangle"; o3.frequency.value = 940;
+      var whine = ctx.createGain();
+      whine.gain.value = 0.02;
+      o3.connect(whine); whine.connect(humGain);
+      var lfo = ctx.createOscillator();
+      lfo.type = "sine"; lfo.frequency.value = 0.23;
+      var lfoG = ctx.createGain();
+      lfoG.gain.value = 14;
+      lfo.connect(lfoG); lfoG.connect(o3.frequency);
+
+      var trem = ctx.createOscillator();
+      trem.type = "sine"; trem.frequency.value = 1.6;
+      var tremG = ctx.createGain();
+      tremG.gain.value = 0.12;
+      trem.connect(tremG); tremG.connect(roar.gain);
+
+      src.start(0);
+      o1.start(0); o2.start(0); o3.start(0); lfo.start(0); trem.start(0);
+      humSent = humLevel;
+      humGain.gain.setTargetAtTime(humLevel * HUM_VOL, ctx.currentTime, 0.6);
+    } catch (e) {
+      humGain = null;
+    }
+  }
+
+  function setHum(level) {
+    if (typeof level !== "number" || !isFinite(level)) return;
+    humLevel = Math.max(0, Math.min(1, level));
+    if (!humGain || !ctx) return;
+    if (Math.abs(humLevel - humSent) < 0.015) return;
+    humSent = humLevel;
+    humGain.gain.setTargetAtTime(humLevel * HUM_VOL, ctx.currentTime, 0.3);
+  }
+
   // ---- sound effects (pistol shot, explosion) ----
   function sfxNoise(t, type, freq, q, peak, decay) {
     var s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
@@ -200,6 +278,7 @@
       nextTime = ctx.currentTime + 0.08;
     }
     applyVolume();
+    startHum();
   }
 
   function stop() {
@@ -239,6 +318,7 @@
     stop: stop,
     tick: tick,
     setMuted: setMuted,
+    setHum: setHum,
     sfx: sfx,
     isMuted: function () { return muted; }
   };
