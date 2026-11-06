@@ -28,7 +28,7 @@ p { margin: 0 0 .75rem; }
 .notice { padding: .5rem 16px; background: #3a2f16; color: var(--accent); font-size: .9rem; }
 main { max-width: 2400px; margin: 0 auto; padding: 16px; }
 
-.play { --play-height: max(420px, calc(100vh - 110px)); display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; margin-bottom: 16px; }
+.play { --play-height: max(420px, calc(100vh - 110px)); display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 30%); gap: 16px; align-items: start; margin-bottom: 16px; }
 .rail { max-height: var(--play-height); overflow-y: auto; }
 .rail #suggest-slot .panel:last-child { margin-bottom: 0; }
 .stage { display: grid; gap: 16px; min-width: 0; }
