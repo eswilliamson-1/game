@@ -75,9 +75,11 @@ try {
   await joined(openRoom);
 
   await Promise.all([aliceRoom.track({}), bobRoom.track({})]);
-  await wait(2000);
+  const counts = () => [aliceRoom, bobRoom].map((r) => Object.keys(r.presenceState()).length);
+  const started = Date.now();
+  while (Date.now() - started < 12_000 && counts().some((count) => count < 2)) await wait(250);
+  check("Players can tell someone else is online", counts().every((count) => count === 2), `${counts()} after ${Date.now() - started}ms`);
   const present = bobRoom.presenceState();
-  check("Players can tell someone else is online", Object.keys(present).length === 2, `${Object.keys(present).length} present`);
   const shown = Object.values(present).flat().flatMap((entry) => Object.keys(entry));
   check("Being online shows nothing about the account", shown.every((key) => key === "presence_ref"), shown.join());
 
