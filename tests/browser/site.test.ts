@@ -268,7 +268,7 @@ test("the game is a 16:9 pane that fits the window, with the site panels to its 
     assert.ok(Math.abs(game.width / game.height - 16 / 9) < 0.02, `${width}x${height}: ${game.width}x${game.height}`);
     assert.ok(game.y + game.height <= height, `${width}x${height}: the game runs off the window`);
     assert.ok(game.x + game.width <= board.x);
-    assert.ok(board.y < suggest.y && suggest.y < recent.y);
+    assert.ok(suggest.y < board.y && board.y < recent.y);
   }
 });
 

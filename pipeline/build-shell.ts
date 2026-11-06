@@ -95,8 +95,9 @@ const PAGES: Record<string, { title: string; page: string; content: string }> = 
         <div id="side" class="extras"></div>
       </div>
       <div class="rail">
-        <div id="board-slot"></div>
         <div id="suggest-slot"></div>
+        <div id="board-slot"></div>
+        <div id="recent-slot"></div>
       </div>
     </div>`,
   },

@@ -404,7 +404,8 @@ async function renderHome() {
   const user = await api.user();
   const [section, proposals, paused] = await Promise.all([boardSection(user), api.proposals(5), api.paused()]);
   $("board-slot").replaceChildren(section);
-  $("suggest-slot").replaceChildren(proposalPanel(user), recentPanel(proposals));
+  $("suggest-slot").replaceChildren(proposalPanel(user));
+  $("recent-slot").replaceChildren(recentPanel(proposals));
   const side = $("side");
   side.replaceChildren(
     user ? "" : el("section", { class: "panel" }, accountForm()),
