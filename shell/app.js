@@ -216,7 +216,7 @@ function proposalPanel(user) {
           el("div", { class: "row" }, el("button", { class: "primary", textContent: "Submit" })),
           status,
         )
-      : el("p", { class: "muted", textContent: "Log in above to suggest a change." }),
+      : el("p", { class: "muted", textContent: "Log in below the game to suggest a change." }),
   );
 }
 
@@ -327,11 +327,11 @@ async function renderHome() {
     api.leaderboard(),
   ]);
   $("board-slot").replaceChildren(section);
+  $("suggest-slot").replaceChildren(proposalPanel(user));
   const side = $("side");
   side.replaceChildren(
     user ? progressPanel(progress) : el("section", { class: "panel" }, accountForm()),
     paused ? el("section", { class: "panel" }, el("p", { textContent: "The game is paused by the owner." })) : "",
-    proposalPanel(user),
     leaderboardPanel(board),
     recentPanel(proposals),
   );

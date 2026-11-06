@@ -89,13 +89,14 @@ const PAGES: Record<string, { title: string; page: string; content: string }> = 
   "index.html": {
     title: "Play & vote",
     page: "home",
-    content: `<iframe class="game" title="The community game" src="${gameUrl}" sandbox="allow-scripts allow-same-origin allow-pointer-lock"></iframe>
-    <div class="layout">
-      <div class="stage">
+    content: `<div class="play">
+      <iframe class="game" title="The community game" src="${gameUrl}" sandbox="allow-scripts allow-same-origin allow-pointer-lock"></iframe>
+      <div class="rail">
         <div id="board-slot"></div>
+        <div id="suggest-slot"></div>
       </div>
-      <div id="side"></div>
-    </div>`,
+    </div>
+    <div id="side" class="extras"></div>`,
   },
   "patch-notes.html": {
     title: "Patch notes",

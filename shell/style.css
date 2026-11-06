@@ -28,14 +28,17 @@ p { margin: 0 0 .75rem; }
 .notice { padding: .5rem 16px; background: #3a2f16; color: var(--accent); font-size: .9rem; }
 main { max-width: 1760px; margin: 0 auto; padding: 16px; }
 
-.layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
-.stage { min-width: 0; }
+.play { --play-height: max(420px, calc(100vh - 110px)); display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; margin-bottom: 16px; }
+.rail { max-height: var(--play-height); overflow-y: auto; }
+.rail .panel:last-child { margin-bottom: 0; }
+.extras { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+.extras .panel { margin-bottom: 0; }
 .ideas { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: .5rem; margin-top: .25rem; }
 .ideas .option { margin: 0; }
 .ideas .nothing { grid-column: 1 / -1; }
 .option .size { position: relative; display: block; margin-top: .25rem; font-size: .8rem; color: var(--bad); }
 .option .size.ready { color: var(--good); }
-.game { width: 100%; height: max(420px, calc(100vh - 110px)); margin-bottom: 16px; border: 1px solid var(--line); border-radius: 8px; background: #000; display: block; }
+.game { width: 100%; height: var(--play-height); border: 1px solid var(--line); border-radius: 8px; background: #000; display: block; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
 .narrow { max-width: 720px; margin: 0 auto; }
 
@@ -84,7 +87,7 @@ label { display: block; margin-bottom: .25rem; font-size: .9rem; color: var(--mu
 .rules li { margin-bottom: .6rem; }
 
 @media (max-width: 860px) {
-  .layout { grid-template-columns: minmax(0, 1fr); }
-  .game { height: max(360px, calc(100svh - 150px)); }
+  .play { --play-height: max(360px, calc(100svh - 150px)); grid-template-columns: minmax(0, 1fr); }
+  .rail { max-height: none; overflow-y: visible; }
   .account { margin-left: 0; width: 100%; }
 }
