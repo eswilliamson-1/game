@@ -192,9 +192,9 @@ test("the page updates by itself without wiping a draft", async () => {
   await logIn(page);
   await page.fill("#proposal", "A half-typed idea");
   await page.focus("#proposal");
-  await page.evaluate(() => document.querySelector("#leaderboard")!.setAttribute("data-old", "yes"));
+  await page.evaluate(() => document.querySelector("#recent")!.setAttribute("data-old", "yes"));
   await page.clock.fastForward(15_000);
-  await page.waitForFunction(() => !document.querySelector("#leaderboard")!.hasAttribute("data-old"));
+  await page.waitForFunction(() => !document.querySelector("#recent")!.hasAttribute("data-old"));
   assert.equal(await page.inputValue("#proposal"), "A half-typed idea");
   assert.equal(await page.evaluate(() => document.activeElement?.id), "proposal");
 });
@@ -232,17 +232,40 @@ test("returning players log in without the age check, and can log out", async ()
   assert.deepEqual(errors, []);
 });
 
-test("joined players see their progress, and everyone sees the leaderboard", async () => {
-  const { page, errors } = await open("/");
-  await page.waitForSelector("#leaderboard >> text=Dragon Fan");
-  assert.equal(await page.locator("#progress").count(), 0);
-  await logIn(page);
-  await page.waitForSelector("#progress >> text=Regular · 10 points");
-  assert.equal(await page.locator("#progress .badge").count(), 3);
-  await page.locator(".option").first().click();
-  await page.waitForSelector("#progress >> text=11 points");
+test("everyone sees what players have done on the leaderboard page", async () => {
+  const { page, errors } = await open("/leaderboard.html");
+  await page.waitForSelector(".player >> text=Dragon Fan");
+  await page.waitForSelector(".player >> text=16 rounds played · 2 ideas on the board · 1 built · 4-round streak");
+  await page.waitForSelector(".player >> text=Latest built: A pet follows you");
   assert.deepEqual(errors, []);
+  await shot(page, "leaderboard");
+});
+
+test("a player's level sits in the header and opens their history", async () => {
+  const { page, errors } = await open("/");
+  await page.waitForSelector("#board");
+  assert.equal(await page.locator("#level").count(), 0);
+  await logIn(page);
+  await page.waitForSelector("#level >> text=Regular · 10 points");
+  await page.click("#level");
+  await page.waitForSelector("#profile >> text=Your suggestions");
+  assert.equal(await page.locator("#progress .badge").count(), 3);
   await shot(page, "progress");
+  await page.click("#profile >> text=Close");
+  await page.waitForSelector("#profile", { state: "detached" });
+  await page.locator(".option").first().click();
+  await page.waitForSelector("#level >> text=11 points");
+  assert.deepEqual(errors, []);
+});
+
+test("the suggestion box sits above recent suggestions, beside the board", async () => {
+  const { page } = await open("/");
+  await page.waitForSelector("#recent");
+  await page.setViewportSize({ width: 1600, height: 900 });
+  const box = async (selector: string) => (await page.locator(selector).boundingBox())!;
+  const [game, board, recent, suggest] = [await box("iframe.game"), await box("#board"), await box("#recent"), await box("#suggest-slot .panel >> nth=0")];
+  assert.ok(game.x < board.x && board.x < recent.x);
+  assert.ok(suggest.y < recent.y);
 });
 
 test("a player can download and delete their data", async () => {

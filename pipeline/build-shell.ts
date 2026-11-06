@@ -53,7 +53,7 @@ function privacyHtml(): string {
       <li><strong>Your username and password.</strong> The password is stored only as a secure hash, so nobody can read it. We don't ask for your email or your real name. Your username is public, so please don't use your real name.</li>
       <li><strong>Your votes</strong>, including which ideas you upvoted or downvoted. Only totals are public, never who voted for what.</li>
       <li><strong>Your suggestions.</strong> The owner can read them. The public suggestions page lists when each one arrived and its status, and adds an AI-written summary and your username once it passes screening. Your original text is never public.</li>
-      <li><strong>Public credit.</strong> Your username is shown when a suggestion of yours reaches the idea board or the patch notes, and on the leaderboard with your points and level.</li>
+      <li><strong>Public credit.</strong> Your username is shown when a suggestion of yours reaches the idea board or the patch notes, and on the leaderboard with your points, level, rounds played, voting streak, how many of your ideas reached the board or were built, and your latest built idea.</li>
       <li><strong>Your points, level, and badges</strong>, worked out from the activity above.</li>
       <li><strong>Technical logs</strong>, including IP addresses, kept by our hosting and database providers for security.</li>
     </ul>
@@ -91,12 +91,15 @@ const PAGES: Record<string, { title: string; page: string; content: string }> = 
     page: "home",
     content: `<div class="play">
       <iframe class="game" title="The community game" src="${gameUrl}" sandbox="allow-scripts allow-same-origin allow-pointer-lock"></iframe>
-      <div class="rail">
-        <div id="board-slot"></div>
-        <div id="suggest-slot"></div>
-      </div>
+      <div class="rail" id="board-slot"></div>
+      <div class="rail suggest" id="suggest-slot"></div>
     </div>
     <div id="side" class="extras"></div>`,
+  },
+  "leaderboard.html": {
+    title: "Leaderboard",
+    page: "leaderboard",
+    content: `<div class="narrow"><h1>Leaderboard</h1><p class="muted">Points come from taking part and from ideas that make it into the game. How anyone voted is never shown.</p><div id="players"></div></div>`,
   },
   "patch-notes.html": {
     title: "Patch notes",

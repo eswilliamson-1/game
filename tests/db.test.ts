@@ -90,6 +90,7 @@ before(async () => {
   await db.exec(readFileSync("supabase/migrations/0018_major_needs_a_third.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0019_more_daily_suggestions.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0020_downvotes_and_expiry.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0021_leaderboard_details.sql", "utf8"));
   moved = (await db.query<{ title: string }>(`select title from ideas where not is_no_change`)).rows.map((r) => r.title);
 });
 
@@ -585,7 +586,7 @@ test("the leaderboard shows only named players with points, and is public", asyn
   await setName(BOB, "Named Bob");
   await setName(OWNER, "Idle One");
   const board = await as("anon", "", "select * from leaderboard()");
-  assert.deepEqual(board.rows, [{ name: "Named Bob", points: 1 }]);
+  assert.deepEqual(board.rows, [{ name: "Named Bob", points: 1, rounds: 1, on_board: 0, built: 0, streak: 1, last_built: null }]);
 });
 
 test("accounts can use a username, but never a real email address", async () => {

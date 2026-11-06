@@ -139,8 +139,8 @@ export function previewApi() {
     myName: async () => name,
     myProgress: async () => ({ votes: voted ? 6 : 5, streak: voted ? 6 : 5, on_ballot: 1, built: 0, points: voted ? 11 : 10 }),
     leaderboard: async () => [
-      { name: "Dragon Fan", points: 46 },
-      { name: "Moss", points: 12 },
+      { name: "Dragon Fan", points: 46, rounds: 16, on_board: 2, built: 1, streak: 4, last_built: "A pet follows you" },
+      { name: "Moss", points: 12, rounds: 7, on_board: 1, built: 0, streak: 1, last_built: null },
     ],
     exportData: async () => ({ player_id: "preview", username: "preview", public_name: name || null, suggestions: [], votes: [] }),
     deleteAccount: async () => {

@@ -90,9 +90,10 @@ async function renderAccount(user) {
     box.replaceChildren(el("span", { textContent: "Not logged in" }));
     return;
   }
-  const [name, owner] = await Promise.all([api.myName(user.id), api.isOwner()]);
+  const [name, owner, progress] = await Promise.all([api.myName(user.id), api.isOwner(), api.myProgress()]);
   box.replaceChildren(
     el("span", { textContent: name || "Player" }),
+    levelButton(progress),
     owner ? el("a", { href: "review.html", textContent: "Review" }) : "",
     el("a", { href: "privacy.html", textContent: "Your data" }),
     el("button", { class: "secondary", textContent: "Log out", onclick: guarded(() => api.signOut()) }),
@@ -274,15 +275,81 @@ function progressPanel(progress) {
   );
 }
 
-function leaderboardPanel(rows) {
+const count = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+function levelButton(progress) {
+  return el("button", {
+    id: "level",
+    class: "secondary",
+    textContent: `${levelFor(progress.points).name} · ${progress.points} points`,
+    onclick: () => openProfile().catch(showFailure),
+  });
+}
+
+function historyList(title, rows, empty) {
   return el(
     "section",
-    { class: "panel", id: "leaderboard" },
-    el("h2", { textContent: "Top players" }),
-    rows.length
-      ? el("ol", { class: "board" }, ...rows.map((row) => el("li", {}, el("span", { textContent: row.name }), el("span", { class: "muted", textContent: `${levelFor(row.points).name} · ${row.points}` }))))
-      : el("p", { class: "muted", textContent: "Nobody yet. Vote to get on the board." }),
+    { class: "history" },
+    el("h3", { textContent: title }),
+    ...(rows.length ? rows : [el("p", { class: "muted", textContent: empty })]),
   );
+}
+
+async function openProfile() {
+  const [progress, data] = await Promise.all([api.myProgress(), api.exportData()]);
+  const latest = (rows) => (rows ?? []).slice(-10).reverse();
+  const dialog = el(
+    "dialog",
+    { class: "profile", id: "profile" },
+    el("h2", { textContent: data.username ?? "Your profile" }),
+    progressPanel(progress),
+    el("p", {
+      textContent: [
+        count(progress.votes, "round played", "rounds played"),
+        `${count(progress.on_ballot, "idea")} on the board`,
+        `${progress.built} built`,
+      ].join(" · "),
+    }),
+    historyList(
+      "Your suggestions",
+      latest(data.suggestions).map((s) =>
+        el("p", {}, el("span", { textContent: s.text ?? "A suggestion" }), " ", el("span", { class: "tag", textContent: PROPOSAL_STATUS[s.status] ?? s.status })),
+      ),
+      "No suggestions yet.",
+    ),
+    historyList("Ideas you upvoted", latest(data.upvotes).map((u) => el("p", { textContent: u.idea })), "No upvotes yet."),
+    el(
+      "div",
+      { class: "row" },
+      el("button", { class: "primary", textContent: "Close", onclick: () => dialog.close() }),
+      el("a", { href: "privacy.html", textContent: "Your data" }),
+    ),
+  );
+  dialog.addEventListener("close", () => dialog.remove());
+  document.body.append(dialog);
+  dialog.showModal();
+}
+
+function playerRow(row, place) {
+  const facts = [
+    count(row.rounds, "round played", "rounds played"),
+    `${count(row.on_board, "idea")} on the board`,
+    `${row.built} built`,
+  ];
+  if (row.streak > 1) facts.push(`${row.streak}-round streak`);
+  return el(
+    "article",
+    { class: "note player" },
+    el("h2", { textContent: `${place + 1}. ${row.name}` }),
+    el("p", { textContent: `${levelFor(row.points).name} · ${row.points} points` }),
+    el("p", { class: "muted", textContent: facts.join(" · ") }),
+    row.last_built ? el("p", { class: "muted", textContent: `Latest built: ${row.last_built}` }) : null,
+  );
+}
+
+async function renderLeaderboard() {
+  const rows = await api.leaderboard();
+  $("players").replaceChildren(...(rows.length ? rows.map(playerRow) : [el("p", { class: "muted", textContent: "Nobody yet. Vote to get on the board." })]));
 }
 
 const PROPOSAL_STATUS = {
@@ -322,36 +389,26 @@ function recentPanel(proposals) {
 // Swaps single panels, so a suggestion being typed isn't wiped.
 async function updateHome() {
   const user = await api.user();
-  const [section, proposals, progress, board] = await Promise.all([
+  const [section, proposals, progress] = await Promise.all([
     boardSection(user),
     api.proposals(5),
     user ? api.myProgress() : null,
-    api.leaderboard(),
   ]);
   $("board").replaceWith(section);
   $("recent").replaceWith(recentPanel(proposals));
-  $("leaderboard").replaceWith(leaderboardPanel(board));
-  if (progress) $("progress").replaceWith(progressPanel(progress));
+  if (progress) $("level")?.replaceWith(levelButton(progress));
   tickCountdown();
 }
 
 async function renderHome() {
   const user = await api.user();
-  const [section, proposals, paused, progress, board] = await Promise.all([
-    boardSection(user),
-    api.proposals(5),
-    api.paused(),
-    user ? api.myProgress() : null,
-    api.leaderboard(),
-  ]);
+  const [section, proposals, paused] = await Promise.all([boardSection(user), api.proposals(5), api.paused()]);
   $("board-slot").replaceChildren(section);
-  $("suggest-slot").replaceChildren(proposalPanel(user));
+  $("suggest-slot").replaceChildren(proposalPanel(user), recentPanel(proposals));
   const side = $("side");
   side.replaceChildren(
-    user ? progressPanel(progress) : el("section", { class: "panel" }, accountForm()),
+    user ? "" : el("section", { class: "panel" }, accountForm()),
     paused ? el("section", { class: "panel" }, el("p", { textContent: "The game is paused by the owner." })) : "",
-    leaderboardPanel(board),
-    recentPanel(proposals),
   );
 }
 
@@ -527,7 +584,7 @@ async function renderPrivacy() {
   );
 }
 
-const PAGES = { home: renderHome, notes: renderNotes, suggestions: renderSuggestions, review: renderReview, privacy: renderPrivacy };
+const PAGES = { home: renderHome, leaderboard: renderLeaderboard, notes: renderNotes, suggestions: renderSuggestions, review: renderReview, privacy: renderPrivacy };
 
 async function refresh() {
   try {
@@ -549,7 +606,7 @@ if (api.preview) {
 api.onAuthChange(refresh);
 refresh();
 // Pages with forms of their own, like Review, are left alone.
-const LIVE_PAGES = { home: updateHome, notes: renderNotes, suggestions: renderSuggestions };
+const LIVE_PAGES = { home: updateHome, leaderboard: renderLeaderboard, notes: renderNotes, suggestions: renderSuggestions };
 
 setInterval(() => {
   if (document.hidden) return;
