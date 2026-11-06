@@ -45,3 +45,13 @@ test("the live policy passes even with Hostinger's extra header merged in", () =
 test("the live game is never served from a stale cache", () => {
   assert.ok(htaccess.includes('Cache-Control "no-cache"'));
 });
+
+test("only the numbers of a move get through, and only within range", async () => {
+  // @ts-expect-error The site scripts are plain JavaScript.
+  const { cleanMove } = await import("../shell/world-bridge.js");
+  const good = { x: 1.234, y: -2, z: 0, heading: 3, action: 31 };
+  assert.deepEqual(cleanMove({ ...good, note: "hello", name: "eric" }), { x: 1.23, y: -2, z: 0, heading: 3, action: 31 });
+  for (const bad of [null, "hi", {}, { ...good, x: "1" }, { ...good, y: NaN }, { ...good, z: Infinity }, { ...good, x: 100001 }, { ...good, action: 32 }, { ...good, action: 1.5 }, { ...good, action: -1 }]) {
+    assert.equal(cleanMove(bad), null);
+  }
+});

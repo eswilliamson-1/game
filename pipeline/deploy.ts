@@ -71,6 +71,13 @@ async function deployGame(dir: string, version: string) {
   console.log(`Published ${version}.`);
 }
 
+async function deployLink() {
+  await withFtp(target("GAME"), async (ftp) => {
+    await ftp.uploadFrom("sandbox-host/account-save.js", "account-save.js");
+  });
+  console.log("Published the game link.");
+}
+
 async function deployShell() {
   loadEnvFile();
   await withFtp(target("VOTE"), async (ftp) => {
@@ -82,4 +89,5 @@ async function deployShell() {
 const args = process.argv.slice(2);
 if (args[0] === "--shell") await deployShell();
 else if (args[0] === "--game") await deployGame(args[1], args[2]);
-else throw new Error("Usage: deploy.ts --shell | --game <dir> <version>");
+else if (args[0] === "--link") await deployLink();
+else throw new Error("Usage: deploy.ts --shell | --link | --game <dir> <version>");

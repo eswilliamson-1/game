@@ -286,9 +286,9 @@ test("a player can download and delete their data", async () => {
   await shot(page, "privacy");
 });
 
-test("the rules page lists all 17 rules and is linked from every page", async () => {
+test("the rules page lists all 18 rules and is linked from every page", async () => {
   const { page } = await open("/rules.html");
-  assert.equal(await page.locator(".rules li").count(), 17);
+  assert.equal(await page.locator(".rules li").count(), 18);
   await shot(page, "rules");
   for (const path of ["/", "/suggestions.html", "/patch-notes.html", "/review.html", "/privacy.html"]) {
     const other = await open(path);
@@ -326,6 +326,42 @@ test("the game can save to the logged-in player's account, and only then", async
   assert.equal(await store(page), true);
   assert.equal(await load(page), "progress");
   assert.equal(await askSite({ type: "game-save:store", id: 3, data: "x".repeat(32001) })(page), false);
+  assert.deepEqual(errors, []);
+});
+
+test("the game can share play through the site, and only numbers reach it", async () => {
+  const { page, errors } = await open("/");
+  await page.waitForSelector("iframe.game");
+  await page.waitForSelector("#board");
+  const game = (): any => page.frames().find((f: any) => f !== page.mainFrame());
+  assert.equal(await askSite({ type: "game-world:mark", id: 11, x: 1, y: 2, z: 3, kind: 4 })(page), false);
+  assert.equal(await askSite({ type: "game-world:join", id: 12 })(page), false);
+  await logIn(page);
+  await page.waitForSelector("#level");
+  await page.waitForTimeout(300);
+  assert.equal(await askSite({ type: "game-world:mark", id: 13, x: 1, y: 2, z: 3, kind: 4 })(page), true);
+  assert.equal(await askSite({ type: "game-world:add", id: 14, slot: 2, amount: 3 })(page), true);
+  const state: any = await askSite({ type: "game-world:state", id: 15 })(page);
+  assert.equal(state.marks.length, 1);
+  assert.equal(state.counters[2], 3);
+
+  const heard = game().evaluate(
+    () =>
+      new Promise((resolve) => {
+        addEventListener("message", (event) => event.data?.type === "game-world:players" && resolve(event.data.players));
+        setTimeout(() => resolve("nothing"), 5000);
+      }),
+  );
+  assert.equal(await askSite({ type: "game-world:join", id: 16 })(page), true);
+  assert.deepEqual(await heard, [{ id: 1, x: 1, y: 2, z: 3, heading: 0.5, action: 2 }]);
+
+  await page.waitForTimeout(200);
+  await game().evaluate(() => parent.postMessage({ type: "game-world:move", move: { x: "hi", y: 0, z: 0, heading: 0, action: 0 } }, "*"));
+  await page.waitForTimeout(100);
+  assert.equal(await page.evaluate(() => sessionStorage.getItem("preview-move")), null);
+  await game().evaluate(() => parent.postMessage({ type: "game-world:move", move: { x: 4.123, y: 0, z: 0, heading: 0, action: 1, note: "hi" } }, "*"));
+  await page.waitForTimeout(100);
+  assert.deepEqual(JSON.parse((await page.evaluate(() => sessionStorage.getItem("preview-move")))!), { x: 4.12, y: 0, z: 0, heading: 0, action: 1 });
   assert.deepEqual(errors, []);
 });
 

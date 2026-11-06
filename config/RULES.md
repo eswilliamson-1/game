@@ -6,7 +6,7 @@
 4. **Automatic builds:** after voting closes, the winning change is built, tested, published, and added to the public patch notes, with credit to whoever suggested it.
 5. **Incremental changes:** the game grows one step at a time. Each idea is rated small, medium, or major, and bigger changes need more upvotes, scaled to the number of active players. Oversized proposals are cut down to a first step.
 6. **Destructive changes are allowed:** but from its first release, the game must always stay playable and performant. A release that fails these tests doesn't go live.
-7. **Contained:** the AI and the game can't affect any other part of the website. The game's one link to the site is a small save on a logged-in player's account, and the game is never told who the player is.
+7. **Contained:** the AI and the game can't affect any other part of the website. The game's only links to the site are a small save on a logged-in player's account and shared play under rule 18, and the game is never told who anyone is.
 8. **Off-limits content:** no hate speech, sexual content, copyrighted characters or other protected material, or anything illegal.
 9. **Player safety:** the game can't collect passwords or personal information, impersonate anyone, send players elsewhere, or trick them.
 10. **Failed builds:** a failed change gets one repair attempt. If that fails, it's dropped with a published reason, and the previous version stays live.
@@ -17,3 +17,4 @@
 15. **Protected framework:** votes and proposals can only change the game itself. They can't change the systems that run it, including voting, screening, review, building, testing, publishing, and the website around the game. Only the site owner can change those.
 16. **Player privacy:** accounts need only a username and password, with no email address or verification, and players are never sent email. Players can download or delete their data at any time. Only what the privacy page describes is kept, and it's never sold.
 17. **Fair rewards:** points, levels, and badges reward taking part, never which option a player picks. Players are credited and ranked by their username.
+18. **Shared play:** if players vote for it, the game can show other logged-in players, marks they left, and progress they share. Others appear without names, and players can't send each other words or drawings. Shared play stays cooperative, because its numbers can't be trusted for fair competition.

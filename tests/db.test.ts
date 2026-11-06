@@ -21,6 +21,14 @@ const SUPABASE_STUB = `
     $$ select nullif(current_setting('test.uid', true), '')::uuid $$;
   grant execute on function auth.uid() to anon, authenticated, service_role;
   insert into auth.users values ('${OWNER}'), ('${ALICE}'), ('${BOB}');
+  create schema realtime;
+  grant usage on schema realtime to anon, authenticated;
+  create table realtime.messages (id bigint generated always as identity primary key, topic text, extension text);
+  alter table realtime.messages enable row level security;
+  grant select, insert on realtime.messages to anon, authenticated;
+  create function realtime.topic() returns text language sql stable as
+    $$ select current_setting('test.topic', true) $$;
+  grant execute on function realtime.topic() to anon, authenticated;
 `;
 
 async function as(role: string, uid: string, sql: string, params: unknown[] = []) {
@@ -92,6 +100,7 @@ before(async () => {
   await db.exec(readFileSync("supabase/migrations/0020_downvotes_and_expiry.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0021_leaderboard_details.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0022_account_saves.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0023_shared_world.sql", "utf8"));
   moved = (await db.query<{ title: string }>(`select title from ideas where not is_no_change`)).rows.map((r) => r.title);
 });
 
@@ -879,4 +888,106 @@ test("the owner sees spending and what's left, and nobody else can", async () =>
   await assert.rejects(user(ALICE, "select set_ai_credit(1)"));
   await assert.rejects(user(ALICE, "select * from ai_spend"));
   await assert.rejects(user(OWNER, "select set_ai_credit(-1)"));
+});
+
+const clearWorld = () => db.exec(`delete from world_marks; delete from world_activity; update world_counters set value = 0 where slot >= 0; update settings set paused = false where id;`);
+const mark = async (uid: string, x = 1, kind = 0) => (await user(uid, `select world_mark($1, 2, 3, $2) as ok`, [x, kind])).rows[0].ok;
+const addTo = async (uid: string, slot = 0, amount = 1) => (await user(uid, `select world_add($1, $2) as ok`, [slot, amount])).rows[0].ok;
+const worldFor = async (uid: string) => (await user(uid, `select world_state() as s`)).rows[0].s;
+const openGap = () => db.exec(`update world_activity set last_mark_at = now() - interval '11 seconds', last_add_at = now() - interval '2 seconds' where user_id is not null`);
+
+test("strangers can read the shared world but can't change it or see who is in it", async () => {
+  await clearWorld();
+  await mark(ALICE);
+  const state = (await as("anon", "", `select world_state() as s`)).rows[0].s;
+  assert.equal(state.marks.length, 1);
+  assert.equal(state.counters.length, 16);
+  assert.deepEqual(Object.keys(state.marks[0]).sort(), ["kind", "mine", "x", "y", "z"]);
+  await assert.rejects(as("anon", "", `select world_mark(1, 2, 3, 0)`));
+  await assert.rejects(as("anon", "", `select world_add(0, 1)`));
+  await assert.rejects(as("anon", "", `select * from world_marks`));
+  await assert.rejects(user(ALICE, `select * from world_marks`));
+  await assert.rejects(user(ALICE, `update world_counters set value = 9 where slot = 0`));
+  await assert.rejects(user(ALICE, `select prune_world()`));
+});
+
+test("a player's own marks are flagged for them alone", async () => {
+  await clearWorld();
+  await mark(ALICE);
+  assert.equal((await worldFor(ALICE)).marks[0].mine, true);
+  assert.equal((await worldFor(BOB)).marks[0].mine, false);
+});
+
+test("marks are limited in rate and number, and only hold numbers in range", async () => {
+  await clearWorld();
+  assert.equal(await mark(ALICE), true);
+  assert.equal(await mark(ALICE), false);
+  for (let i = 0; i < 6; i++) {
+    await openGap();
+    assert.equal(await mark(ALICE, i), true);
+  }
+  assert.equal((await worldFor(ALICE)).marks.length, 5);
+  await openGap();
+  await assert.rejects(mark(ALICE, 100001));
+  await assert.rejects(user(ALICE, `select world_mark('NaN', 0, 0, 0)`));
+  await assert.rejects(user(ALICE, `select world_mark('Infinity', 0, 0, 0)`));
+  await assert.rejects(mark(ALICE, 0, 32));
+});
+
+test("shared counters only grow by small steps, and don't record who added", async () => {
+  await clearWorld();
+  assert.equal(await addTo(ALICE, 3, 10), true);
+  assert.equal(await addTo(ALICE, 3, 10), false);
+  await openGap();
+  await assert.rejects(addTo(ALICE, 3, 11));
+  await assert.rejects(addTo(ALICE, 3, 0));
+  await assert.rejects(addTo(ALICE, 3, -5));
+  await assert.rejects(addTo(ALICE, 16, 1));
+  assert.equal((await worldFor(BOB)).counters[3], 10);
+});
+
+test("old marks are pruned, and pausing the site stops shared play", async () => {
+  await clearWorld();
+  await mark(ALICE);
+  await db.exec(`update world_marks set created_at = now() - interval '8 days' where id > 0`);
+  assert.equal((await worldFor(ALICE)).marks.length, 0);
+  await db.exec(`select prune_world()`);
+  assert.equal((await db.query(`select 1 from world_marks`)).rows.length, 0);
+  await db.exec(`update settings set paused = true where id`);
+  await openGap();
+  assert.equal(await mark(ALICE), false);
+  assert.equal(await addTo(ALICE), false);
+  await clearWorld();
+});
+
+test("marks are in the data download and go with the account", async () => {
+  await clearWorld();
+  const gone = "30000000-0000-0000-0000-000000000002";
+  await db.exec(`insert into auth.users (id) values ('${gone}')`);
+  await mark(gone, 7);
+  const { rows } = await user(gone, `select export_my_data() as d`);
+  assert.equal(rows[0].d.world_marks[0].x, 7);
+  await user(gone, `select delete_my_account()`);
+  assert.equal((await db.query(`select 1 from world_marks where user_id = '${gone}'`)).rows.length, 0);
+});
+
+const roomRead = async (role: string, uid: string, topic: string, extension = "broadcast") => {
+  await db.exec(`delete from realtime.messages; set test.topic = '${topic}';`);
+  await db.query(`insert into realtime.messages (topic, extension) values ($1, $2)`, [topic, extension]);
+  return (await as(role, uid, `select 1 from realtime.messages`)).rows.length;
+};
+
+test("only logged-in players can use the live room, and pausing closes it", async () => {
+  await clearWorld();
+  assert.equal(await roomRead("authenticated", ALICE, "world"), 1);
+  assert.equal(await roomRead("authenticated", ALICE, "world", "presence"), 1);
+  assert.equal(await roomRead("authenticated", ALICE, "world", "postgres_changes"), 0);
+  assert.equal(await roomRead("authenticated", ALICE, "elsewhere"), 0);
+  assert.equal(await roomRead("anon", "", "world"), 0);
+  await db.exec(`set test.topic = 'world'`);
+  await assert.rejects(as("anon", "", `insert into realtime.messages (topic, extension) values ('world', 'broadcast')`));
+  await user(ALICE, `insert into realtime.messages (topic, extension) values ('world', 'broadcast')`);
+  await db.exec(`update settings set paused = true where id`);
+  assert.equal(await roomRead("authenticated", ALICE, "world"), 0);
+  await clearWorld();
 });

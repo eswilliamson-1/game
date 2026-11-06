@@ -18,7 +18,7 @@ async function rest(path: string, init: RequestInit = {}) {
 }
 
 // Tables a stranger must never read. An empty list also passes: row security hides the rows.
-for (const table of ["proposals", "votes", "upvotes", "downvotes", "game_saves", "participation", "profiles", "owners", "ai_spend", "ideas", "schema_migrations"]) {
+for (const table of ["proposals", "votes", "upvotes", "downvotes", "game_saves", "world_marks", "world_activity", "participation", "profiles", "owners", "ai_spend", "ideas", "schema_migrations"]) {
   const { status, text } = await rest(`${table}?select=*&limit=1`);
   add(`Can't read ${table}`, status >= 400 || text.trim() === "[]", `status ${status}`);
 }
@@ -40,6 +40,8 @@ for (const [method, path, body] of [
   ["POST", "upvotes", { idea_id: -1, user_id: NOBODY }],
   ["POST", "downvotes", { idea_id: -1, user_id: NOBODY }],
   ["POST", "game_saves", { user_id: NOBODY, data: "x" }],
+  ["POST", "world_marks", { user_id: NOBODY, x: 0, y: 0, z: 0, kind: 0 }],
+  ["PATCH", "world_counters?slot=eq.0", { value: 1 }],
   ["POST", "changes", { kind: "bad", title: "x" }],
 ] as const) {
   const { status, text } = await rest(path, { method, body: body ? JSON.stringify(body) : undefined });
@@ -75,6 +77,9 @@ for (const [name, args] of [
   ["toggle_downvote", { p_idea: -1 }],
   ["load_game_save", {}],
   ["store_game_save", { p_data: "x" }],
+  ["world_mark", { p_x: 0, p_y: 0, p_z: 0, p_kind: 0 }],
+  ["world_add", { p_slot: 0, p_amount: 1 }],
+  ["prune_world", {}],
   ["remove_idea", { p_idea: -1, p_reason: "x" }],
   ["expire_ideas", {}],
   ["submit_proposal", { p_body: "x" }],

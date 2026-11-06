@@ -51,6 +51,27 @@ export function liveApi(url, key) {
     downvote: async (idea) => must(await db.rpc("toggle_downvote", { p_idea: idea })),
     loadGameSave: async () => must(await db.rpc("load_game_save")),
     storeGameSave: async (data) => must(await db.rpc("store_game_save", { p_data: data })),
+    worldState: async () => must(await db.rpc("world_state")),
+    worldMark: async (x, y, z, kind) => must(await db.rpc("world_mark", { p_x: x, p_y: y, p_z: z, p_kind: kind })),
+    worldAdd: async (slot, amount) => must(await db.rpc("world_add", { p_slot: slot, p_amount: amount })),
+    async joinLive({ onMove, onCount, onLeave }) {
+      const { data } = await db.auth.getSession();
+      await db.realtime.setAuth(data.session.access_token);
+      // A random name for this visit. Other players never get the account behind it.
+      const from = crypto.randomUUID();
+      const room = db.channel("world", { config: { private: true, presence: { key: from } } });
+      room.on("broadcast", { event: "move" }, ({ payload }) => onMove(payload));
+      room.on("presence", { event: "sync" }, () => onCount(Object.keys(room.presenceState()).length - 1));
+      room.on("presence", { event: "leave" }, ({ key }) => onLeave(key));
+      await new Promise((resolve, reject) => {
+        room.subscribe((status) => (status === "SUBSCRIBED" ? resolve() : status !== "CLOSED" && reject(new Error(status))));
+      });
+      await room.track({});
+      return {
+        send: (move) => room.send({ type: "broadcast", event: "move", payload: { ...move, from } }),
+        leave: () => db.removeChannel(room),
+      };
+    },
     propose: async (body) => must(await db.rpc("submit_proposal", { p_body: body })),
     myName: async (userId) => must(await db.from("profiles").select("display_name").eq("user_id", userId).maybeSingle())?.display_name ?? "",
     myProgress: async () => must(await db.rpc("my_progress")),
@@ -88,6 +109,8 @@ export function previewApi() {
     { id: 4, title: "Change nothing this round", summary: null, credit: "the rules", size: "small", need: 1, votes: 0, is_no_change: true, mine: false },
   ];
   let voted = false;
+  const marks = [];
+  const counters = Array(16).fill(0);
   let credit = null;
   let buildChecks = 0;
   // Kept for the tab, so the preview stays joined between pages.
@@ -139,6 +162,29 @@ export function previewApi() {
     },
     loadGameSave: async () => sessionStorage.getItem("preview-save"),
     storeGameSave: async (data) => sessionStorage.setItem("preview-save", data),
+    worldState: async () => ({ marks, counters }),
+    worldMark: async (x, y, z, kind) => {
+      if (!signedIn) return false;
+      marks.push({ x, y, z, kind, mine: true });
+      return true;
+    },
+    worldAdd: async (slot, amount) => {
+      if (!signedIn) return false;
+      counters[slot] += amount;
+      return true;
+    },
+    // Stands in for other players, including one sending things it shouldn't.
+    joinLive: async ({ onMove, onCount }) => {
+      setTimeout(() => {
+        onCount(1);
+        onMove({ from: "11111111-1111-4111-8111-111111111111", x: 1, y: 2, z: 3, heading: 0.5, action: 2, note: "hello" });
+        onMove({ from: "22222222-2222-4222-8222-222222222222", x: "hello", y: 2, z: 3, heading: 0, action: 2 });
+      }, 50);
+      return {
+        send: async (move) => sessionStorage.setItem("preview-move", JSON.stringify(move)),
+        leave: async () => {},
+      };
+    },
     propose: async () => {},
     myName: async () => name,
     myProgress: async () => ({ votes: voted ? 6 : 5, streak: voted ? 6 : 5, on_ballot: 1, built: 0, points: voted ? 11 : 10 }),

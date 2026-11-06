@@ -56,6 +56,7 @@ function privacyHtml(): string {
       <li><strong>Public credit.</strong> Your username is shown when a suggestion of yours reaches the idea board or the patch notes, and on the leaderboard with your points, level, rounds played, voting streak, how many of your ideas reached the board or were built, and your latest built idea.</li>
       <li><strong>Your points, level, and badges</strong>, worked out from the activity above.</li>
       <li><strong>Your game save.</strong> When you're logged in, the game can keep a small save of your progress on your account, so it follows you between devices. It holds game progress only, is included in your data download, and is deleted with your account.</li>
+      <li><strong>Shared play.</strong> If players vote for it, the game can show other players. When you're logged in, it can share your position in the game while you play, leave marks in the game world, and add to shared totals. Other players see only an unnamed figure or mark, and can't send you text. Live positions aren't stored. Marks are kept for seven days, are included in your data download, and are deleted with your account. Shared totals don't record who added to them.</li>
       <li><strong>Technical logs</strong>, including IP addresses, kept by our hosting and database providers for security.</li>
     </ul>
     <p>Suggestions that contain an email address or phone number are refused. Please leave out other personal details too.</p>

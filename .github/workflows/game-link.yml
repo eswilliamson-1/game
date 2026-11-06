@@ -1,0 +1,32 @@
+name: Game link
+# Uploads the protected file that links the game to the voting site, for when it
+# changes between game releases. No AI runs here, and the game itself isn't touched.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: game-deploy
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node pipeline/deploy.ts --link
+        env:
+          GAME_FTP_HOST: ${{ secrets.GAME_FTP_HOST }}
+          GAME_FTP_USER: ${{ secrets.GAME_FTP_USER }}
+          GAME_FTP_PASSWORD: ${{ secrets.GAME_FTP_PASSWORD }}
+          GAME_FTP_DIR: ${{ vars.GAME_FTP_DIR }}

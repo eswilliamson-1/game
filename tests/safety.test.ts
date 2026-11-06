@@ -108,7 +108,7 @@ test("the scan requires index.html and blocks external CSS", () => {
 
 test("a game can load the account save file, but never replace it or reach the site itself", () => {
   const html = '<!doctype html><title>x</title><script src="account-save.js"></script><script src="game.js"></script>';
-  const clean = [{ path: "index.html", content: html }, { path: "game.js", content: "window.gameSave.load();" }];
+  const clean = [{ path: "index.html", content: html }, { path: "game.js", content: "window.gameSave.load(); window.gameWorld.join(show); window.gameWorld.move(1, 2, 3, 0, 0);" }];
   assert.deepEqual(scanFiles(clean), []);
   assert.ok(scanFiles([...clean, { path: "account-save.js", content: "1;" }]).some((v) => v.problem.includes("account save")));
   assert.ok(scanFiles([clean[0], { path: "game.js", content: "window.parent.postMessage('x', '*');" }]).length > 0);
