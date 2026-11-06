@@ -34,7 +34,11 @@ main { max-width: 1760px; margin: 0 auto; padding: 16px; }
 .extras { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
 .extras .panel { margin-bottom: 0; }
 .ideas { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: .5rem; margin-top: .25rem; }
-.ideas .option { margin: 0; }
+.idea { position: relative; }
+.ideas .option { margin: 0; height: 100%; }
+.down { position: absolute; right: .5rem; bottom: .5rem; padding: .1rem .45rem; font-size: .8rem; background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+.down:hover:not(:disabled), .down[aria-pressed="true"] { color: var(--bad); border-color: var(--bad); }
+.down:disabled { cursor: default; }
 .ideas .nothing { grid-column: 1 / -1; }
 .option .size { position: relative; display: block; margin-top: .25rem; font-size: .8rem; color: var(--bad); }
 .option .size.ready { color: var(--good); }

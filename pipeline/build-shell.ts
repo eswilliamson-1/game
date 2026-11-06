@@ -51,7 +51,7 @@ function privacyHtml(): string {
     <h2>What we keep</h2>
     <ul>
       <li><strong>Your username and password.</strong> The password is stored only as a secure hash, so nobody can read it. We don't ask for your email or your real name. Your username is public, so please don't use your real name.</li>
-      <li><strong>Your votes</strong>, including which ideas you upvoted. Only totals are public, never who voted for what.</li>
+      <li><strong>Your votes</strong>, including which ideas you upvoted or downvoted. Only totals are public, never who voted for what.</li>
       <li><strong>Your suggestions.</strong> The owner can read them. The public suggestions page lists when each one arrived and its status, and adds an AI-written summary and your username once it passes screening. Your original text is never public.</li>
       <li><strong>Public credit.</strong> Your username is shown when a suggestion of yours reaches the idea board or the patch notes, and on the leaderboard with your points and level.</li>
       <li><strong>Your points, level, and badges</strong>, worked out from the activity above.</li>

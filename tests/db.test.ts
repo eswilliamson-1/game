@@ -89,6 +89,7 @@ before(async () => {
   await db.exec(readFileSync("supabase/migrations/0017_active_means_three_days.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0018_major_needs_a_third.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/0019_more_daily_suggestions.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/0020_downvotes_and_expiry.sql", "utf8"));
   moved = (await db.query<{ title: string }>(`select title from ideas where not is_no_change`)).rows.map((r) => r.title);
 });
 
@@ -715,6 +716,90 @@ test("a lone player can pass a major idea", async () => {
   const big = await sized("Big", "major");
   await up(ALICE, big);
   assert.equal((await endRound()).build.length, 1);
+});
+
+const down = (uid: string, idea: number) => user(uid, `select toggle_downvote($1)`, [idea]);
+const suggested = async (title: string) => {
+  const { rows } = await db.query<{ id: number }>(`insert into proposals (user_id, title, body, status) values ($1, $2, $2, 'on_ballot') returning id`, [ALICE, title]);
+  const id = await addIdea(title, false, rows[0].id);
+  return { id, proposal: rows[0].id };
+};
+const proposalRow = async (id: number) => (await db.query<{ status: string; reason: string }>(`select status, reason from proposals where id = $1`, [id])).rows[0];
+
+test("a downvote removes an idea nobody wants, and the record says why", async () => {
+  await reset();
+  await release();
+  const { id, proposal } = await suggested("Unwanted");
+  await down(BOB, id);
+  assert.equal((await idea(id)).status, "rejected");
+  assert.deepEqual(await proposalRow(proposal), { status: "rejected", reason: "Removed by player downvotes." });
+});
+
+test("an upvoted idea needs more downvotes than upvotes to leave", async () => {
+  await reset();
+  await release();
+  const id = await sized("Liked", "small");
+  await up(ALICE, id);
+  await down(BOB, id);
+  assert.equal((await idea(id)).status, "open");
+  await down(OWNER, id);
+  assert.equal((await idea(id)).status, "rejected");
+});
+
+test("the downvotes needed to remove an idea grow with active players", async () => {
+  await reset();
+  await release();
+  await crowd(20);
+  const id = await sized("Disputed", "small");
+  await down(ALICE, id);
+  await down(BOB, id);
+  assert.equal((await idea(id)).status, "open");
+  await noCrowd();
+});
+
+test("an upvote and a downvote from one player replace each other", async () => {
+  await reset();
+  await release();
+  await crowd(20);
+  const id = await sized("Torn", "small");
+  const mine = async () => (await user(ALICE, `select votes::int, downvotes::int, mine, mine_down from board() where id = $1`, [id])).rows[0];
+  await up(ALICE, id);
+  await down(ALICE, id);
+  assert.deepEqual(await mine(), { votes: 0, downvotes: 1, mine: false, mine_down: true });
+  await up(ALICE, id);
+  assert.deepEqual(await mine(), { votes: 1, downvotes: 0, mine: true, mine_down: false });
+  await noCrowd();
+});
+
+test("change nothing can't be downvoted, and strangers can't downvote or read downvotes", async () => {
+  await reset();
+  const { rows } = await db.query<{ id: number }>(`select id from ideas where is_no_change`);
+  await assert.rejects(down(ALICE, rows[0].id), /not on the board/);
+  await assert.rejects(as("anon", "", `select toggle_downvote($1)`, [rows[0].id]));
+  await assert.rejects(as("anon", "", `select * from downvotes`));
+  await assert.rejects(user(ALICE, `select * from downvotes`));
+  await assert.rejects(user(ALICE, `select expire_ideas()`));
+  await assert.rejects(user(ALICE, `select remove_idea($1, 'x')`, [rows[0].id]));
+});
+
+test("a suggestion with no recent upvotes leaves the board, and others stay", async () => {
+  await reset();
+  await release();
+  const old = await suggested("Forgotten");
+  const fresh = await suggested("Fresh");
+  const backed = await suggested("Backed");
+  const ai = await addIdea("An old AI idea");
+  await up(BOB, backed.id);
+  await db.query(`update ideas set created_at = now() - interval '4 days' where id = any($1)`, [[old.id, backed.id, ai]]);
+  await db.query(`select expire_ideas()`);
+  assert.equal((await idea(old.id)).status, "rejected");
+  assert.equal((await proposalRow(old.proposal)).reason, "Left the board after going without upvotes.");
+  assert.equal((await idea(fresh.id)).status, "open");
+  assert.equal((await idea(backed.id)).status, "open");
+  assert.equal((await idea(ai)).status, "open");
+  await db.query(`update upvotes set created_at = now() - interval '4 days' where idea_id = $1`, [backed.id]);
+  await db.query(`select expire_ideas()`);
+  assert.equal((await idea(backed.id)).status, "rejected");
 });
 
 test("only the owner can change an idea's size", async () => {

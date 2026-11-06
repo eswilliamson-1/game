@@ -48,6 +48,7 @@ export function liveApi(url, key) {
       return { label, stage: ballot.build_stage, startedAt: ballot.created_at };
     },
     upvote: async (idea) => must(await db.rpc("toggle_upvote", { p_idea: idea })),
+    downvote: async (idea) => must(await db.rpc("toggle_downvote", { p_idea: idea })),
     propose: async (body) => must(await db.rpc("submit_proposal", { p_body: body })),
     myName: async (userId) => must(await db.from("profiles").select("display_name").eq("user_id", userId).maybeSingle())?.display_name ?? "",
     myProgress: async () => must(await db.rpc("my_progress")),
@@ -128,6 +129,11 @@ export function previewApi() {
       idea.mine = !idea.mine;
       idea.votes += idea.mine ? 1 : -1;
       voted = true;
+    },
+    downvote: async (id) => {
+      const idea = ideas.find((i) => i.id === id);
+      idea.mine_down = !idea.mine_down;
+      idea.downvotes = (idea.downvotes ?? 0) + (idea.mine_down ? 1 : -1);
     },
     propose: async () => {},
     myName: async () => name,

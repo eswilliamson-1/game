@@ -153,10 +153,10 @@ function boardPanel(ideas, round, user, windowMinutes) {
     const votes = Number(idea.votes);
     const bar = el("span", { class: "bar" });
     bar.style.width = `${Math.round((votes / top) * 100)}%`;
-    return el(
+    const vote = el(
       "button",
       {
-        class: idea.is_no_change ? "option nothing" : "option",
+        class: "option",
         disabled: !user || idea.building,
         "aria-pressed": String(idea.mine),
         onclick: async () => {
@@ -174,12 +174,30 @@ function boardPanel(ideas, round, user, windowMinutes) {
       idea.is_no_change ? null : el("span", { class: "detail", textContent: `Suggested by ${idea.credit}` }),
       idea.is_no_change ? null : el("span", { class: `size ${idea.building || votes >= Number(idea.need) ? "ready" : ""}`, textContent: idea.building ? "Won, and being built now" : sizeLabel(idea, votes) }),
     );
+    const down = idea.is_no_change || idea.building
+      ? null
+      : el("button", {
+          class: "down",
+          disabled: !user,
+          "aria-pressed": String(Boolean(idea.mine_down)),
+          "aria-label": `Downvote ${idea.title}`,
+          textContent: `▼ ${Number(idea.downvotes ?? 0)}`,
+          onclick: async () => {
+            try {
+              await api.downvote(idea.id);
+              await updateHome();
+            } catch (error) {
+              showError(status, error);
+            }
+          },
+        });
+    return el("div", { class: idea.is_no_change ? "idea nothing" : "idea" }, vote, down);
   });
   return el(
     "section",
     { class: "panel", id: "board" },
     el("h2", { textContent: `Idea board · Round ${round.round_number}` }),
-    el("p", { class: "muted", textContent: "Upvote as many ideas as you like. When the round ends, the top idea that has reached its upvote target gets built. Bigger changes need more upvotes, and a tie changes nothing." }),
+    el("p", { class: "muted", textContent: "Upvote as many ideas as you like, and downvote the ones you don't want. Enough downvotes remove an idea. When the round ends, the top idea that has reached its upvote target gets built. Bigger changes need more upvotes, and a tie changes nothing." }),
     el("div", { class: "ideas" }, ...buttons),
     closesAt
       ? el("p", { class: "countdown", id: "ballot-time" })
