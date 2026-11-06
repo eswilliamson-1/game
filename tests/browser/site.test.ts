@@ -258,14 +258,18 @@ test("a player's level sits in the header and opens their history", async () => 
   assert.deepEqual(errors, []);
 });
 
-test("the suggestion box sits above recent suggestions, beside the board", async () => {
+test("the game is a 16:9 pane that fits the window, with the site panels to its right", async () => {
   const { page } = await open("/");
   await page.waitForSelector("#recent");
-  await page.setViewportSize({ width: 1600, height: 900 });
   const box = async (selector: string) => (await page.locator(selector).boundingBox())!;
-  const [game, board, recent, suggest] = [await box("iframe.game"), await box("#board"), await box("#recent"), await box("#suggest-slot .panel >> nth=0")];
-  assert.ok(game.x < board.x && board.x < recent.x);
-  assert.ok(suggest.y < recent.y);
+  for (const [width, height] of [[1280, 720], [1600, 900], [1920, 1080], [1920, 700]]) {
+    await page.setViewportSize({ width, height });
+    const [game, board, recent, suggest] = [await box("iframe.game"), await box("#board"), await box("#recent"), await box("#suggest-slot .panel >> nth=0")];
+    assert.ok(Math.abs(game.width / game.height - 16 / 9) < 0.02, `${width}x${height}: ${game.width}x${game.height}`);
+    assert.ok(game.y + game.height <= height, `${width}x${height}: the game runs off the window`);
+    assert.ok(game.x + game.width <= board.x);
+    assert.ok(board.y < suggest.y && suggest.y < recent.y);
+  }
 });
 
 test("a player can download and delete their data", async () => {

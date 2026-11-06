@@ -26,11 +26,12 @@ p { margin: 0 0 .75rem; }
 .account { margin-left: auto; display: flex; align-items: center; gap: .5rem; color: var(--muted); font-size: .9rem; }
 
 .notice { padding: .5rem 16px; background: #3a2f16; color: var(--accent); font-size: .9rem; }
-main { max-width: 1760px; margin: 0 auto; padding: 16px; }
+main { max-width: 2400px; margin: 0 auto; padding: 16px; }
 
-.play { --play-height: max(420px, calc(100vh - 110px)); display: grid; grid-template-columns: minmax(0, 1fr) 320px 280px; gap: 16px; align-items: start; margin-bottom: 16px; }
+.play { --play-height: max(420px, calc(100vh - 110px)); display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; margin-bottom: 16px; }
 .rail { max-height: var(--play-height); overflow-y: auto; }
-.rail .panel:last-child { margin-bottom: 0; }
+.rail #suggest-slot .panel:last-child { margin-bottom: 0; }
+.stage { display: grid; gap: 16px; min-width: 0; }
 .extras { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
 .extras .panel { margin-bottom: 0; }
 .ideas { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: .5rem; margin-top: .25rem; }
@@ -42,7 +43,7 @@ main { max-width: 1760px; margin: 0 auto; padding: 16px; }
 .ideas .nothing { grid-column: 1 / -1; }
 .option .size { position: relative; display: block; margin-top: .25rem; font-size: .8rem; color: var(--bad); }
 .option .size.ready { color: var(--good); }
-.game { width: 100%; height: var(--play-height); border: 1px solid var(--line); border-radius: 8px; background: #000; display: block; }
+.game { width: min(100%, calc(var(--play-height) * 16 / 9)); aspect-ratio: 16 / 9; justify-self: center; border: 1px solid var(--line); border-radius: 8px; background: #000; display: block; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
 .narrow { max-width: 720px; margin: 0 auto; }
 .profile { width: min(560px, calc(100vw - 32px)); max-height: 85vh; padding: 16px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; }
@@ -93,13 +94,9 @@ label { display: block; margin-bottom: .25rem; font-size: .9rem; color: var(--mu
 .rules ol { padding-left: 1.4rem; }
 .rules li { margin-bottom: .6rem; }
 
-@media (max-width: 1280px) {
-  .play { grid-template-columns: minmax(0, 1fr) 320px; }
-  .rail.suggest { grid-column: 1 / -1; max-height: none; }
-}
-
 @media (max-width: 860px) {
   .play { --play-height: max(360px, calc(100svh - 150px)); grid-template-columns: minmax(0, 1fr); }
+  .game { width: 100%; height: var(--play-height); aspect-ratio: auto; }
   .rail { max-height: none; overflow-y: visible; }
   .account { margin-left: 0; width: 100%; }
 }

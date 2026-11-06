@@ -90,11 +90,15 @@ const PAGES: Record<string, { title: string; page: string; content: string }> = 
     title: "Play & vote",
     page: "home",
     content: `<div class="play">
-      <iframe class="game" title="The community game" src="${gameUrl}" sandbox="allow-scripts allow-same-origin allow-pointer-lock"></iframe>
-      <div class="rail" id="board-slot"></div>
-      <div class="rail suggest" id="suggest-slot"></div>
-    </div>
-    <div id="side" class="extras"></div>`,
+      <div class="stage">
+        <iframe class="game" title="The community game" src="${gameUrl}" sandbox="allow-scripts allow-same-origin allow-pointer-lock"></iframe>
+        <div id="side" class="extras"></div>
+      </div>
+      <div class="rail">
+        <div id="board-slot"></div>
+        <div id="suggest-slot"></div>
+      </div>
+    </div>`,
   },
   "leaderboard.html": {
     title: "Leaderboard",
