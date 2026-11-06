@@ -16,6 +16,7 @@
         <button id="gunBtn" type="button">Pistol: Holstered</button>
         <button id="invBtn" type="button">Inventory</button>
         <button id="musicBtn" type="button">Music: On</button>
+        <button id="resetBtn" type="button">Reset Valley</button>
       </div>
     </header>
     <div id="stage">
@@ -23,7 +24,7 @@
       <div id="lockHint" class="hidden">Press Esc to free your cursor</div>
       <div id="overlay">
         <p id="overlayTitle">Welcome to Mossvale</p>
-        <p id="overlayText">A quiet green valley waits to be explored. Walk your little wanderer anywhere you like: through meadows and groves, along dirt paths, past an old cottage, a still pond, and a rocky ridge. Rocks, water, and the old stone walls block your way. Trees do too, unless you draw your pistol and blast them out of the way.</p>
+        <p id="overlayText">A quiet green valley waits to be explored. Walk your little wanderer anywhere you like: through meadows and groves, along dirt paths, past an old cottage, a still pond, and a rocky ridge. Rocks, water, and the old stone walls block your way. Trees do too, unless you draw your pistol and blast them out of the way. Your cleared trees and wood pile are remembered in this browser.</p>
         <button id="startBtn" type="button">Start exploring</button>
       </div>
       <div id="invPanel" class="hidden">
@@ -32,8 +33,16 @@
         <p id="invEmpty" class="hidden">Your inventory is empty.</p>
         <button id="invClose" type="button">Close</button>
       </div>
+      <div id="resetPanel" class="hidden">
+        <p id="resetTitle">Reset the valley?</p>
+        <p id="resetText">Every tree grows back, and your wood and trees-cleared count go back to zero. This can't be undone.</p>
+        <div id="resetBtns">
+          <button id="resetYes" type="button">Yes, reset</button>
+          <button id="resetNo" type="button">Cancel</button>
+        </div>
+      </div>
     </div>
-    <p class="hint">Walk: WASD or arrow keys, or drag on the left half of the view. Turn camera: Q / E, drag the view, or click the view on desktop for mouse look (Esc frees the cursor). Pistol: G or the Pistol button to equip, aim with the camera, fire with F, Space, a click, or a tap on the view. Inventory: I or the Inventory button. M toggles music.</p>
+    <p class="hint">Walk: WASD or arrow keys, or drag on the left half of the view. Turn camera: Q / E, drag the view, or click the view on desktop for mouse look (Esc frees the cursor). Pistol: G or the Pistol button to equip, aim with the camera, fire with F, Space, a click, or a tap on the view. Inventory: I or the Inventory button. M toggles music. Progress is saved in this browser.</p>
   </main>
   <script src="account-save.js"></script>
   <script src="music.js"></script>

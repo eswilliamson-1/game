@@ -12,6 +12,7 @@
   var stage = document.getElementById("stage");
   var goalEl = document.getElementById("goal");
   var overlay = document.getElementById("overlay");
+  var overlayTitle = document.getElementById("overlayTitle");
   var startBtn = document.getElementById("startBtn");
   var musicBtn = document.getElementById("musicBtn");
   var gunBtn = document.getElementById("gunBtn");
@@ -22,6 +23,10 @@
   var invClose = document.getElementById("invClose");
   var treeCountEl = document.getElementById("treeCount");
   var lockHint = document.getElementById("lockHint");
+  var resetBtn = document.getElementById("resetBtn");
+  var resetPanel = document.getElementById("resetPanel");
+  var resetYes = document.getElementById("resetYes");
+  var resetNo = document.getElementById("resetNo");
 
   goalEl.textContent = GOAL;
 
@@ -165,6 +170,7 @@
   var BLOCKERS = [];
   var GROUND = [], FLOWERS = [], SHADOWS = [];
   var POND_PTS = [];
+  var TREE_SHADOW_COL = [20, 40, 20], TREE_SHADOW_A = 0.22;
 
   function blobPts(cx, cz, r, n, y, jit) {
     var p = [], i, a, rr;
@@ -253,8 +259,8 @@
       s = 0.8 + rnd() * 0.5;
       var kind = rnd() < 0.45 ? 1 : 0;
       var circ = { x: x, z: z, r: 0.25 + 0.15 * s };
-      var shad = { pts: blobPts(x + 0.25, z - 0.2, 1.1 * s, 8, 0.015, 0), col: [20, 40, 20], a: 0.22, x: x, z: z };
-      TREES.push({ x: x, z: z, s: s, kind: kind, circ: circ, shadow: shad });
+      var shad = { pts: blobPts(x + 0.25, z - 0.2, 1.1 * s, 8, 0.015, 0), col: TREE_SHADOW_COL, a: TREE_SHADOW_A, x: x, z: z };
+      TREES.push({ id: TREES.length, x: x, z: z, s: s, kind: kind, circ: circ, shadow: shad, shadowPts0: shad.pts, gone: false });
       CIRCS.push(circ);
       SHADOWS.push(shad);
     }
@@ -308,6 +314,8 @@
       }
     }
   })();
+
+  var ALL_TREES = TREES.slice();
 
   var player = { x: START_X, z: START_Z, yaw: 0, walk: 0, walkAmt: 0, inventory: [] };
   var camYaw = 0;
@@ -372,15 +380,19 @@
     else invBtn.classList.remove("on");
   }
 
+  function freeCursor() {
+    if (locked && typeof document.exitPointerLock === "function") {
+      try { document.exitPointerLock(); } catch (err) { /* ignore */ }
+    }
+  }
+
   function setInventory(open) {
     window.gameTest.inputsHandled++;
     invOpen = !!open;
     if (invOpen) {
       renderInventory();
       invPanel.classList.remove("hidden");
-      if (locked && typeof document.exitPointerLock === "function") {
-        try { document.exitPointerLock(); } catch (err) { /* ignore */ }
-      }
+      freeCursor();
     } else {
       invPanel.classList.add("hidden");
     }
@@ -388,6 +400,97 @@
   }
 
   addItem(player, "pistol", 1);
+
+  // ---- saved progress (this browser only) ----
+  var PROGRESS_KEY = "mossvaleProgress";
+  var resetOpen = false;
+
+  function woodCount() {
+    var it = findItem(player.inventory, "wood");
+    return it ? it.count : 0;
+  }
+
+  function saveProgress() {
+    var gone = [];
+    for (var i = 0; i < ALL_TREES.length; i++) if (ALL_TREES[i].gone) gone.push(ALL_TREES[i].id);
+    try {
+      localStorage.setItem(PROGRESS_KEY, JSON.stringify({ v: 1, cleared: cleared, wood: woodCount(), gone: gone }));
+    } catch (e) { /* storage unavailable: play on without saving */ }
+  }
+
+  // take a tree out of the world, leaving a scorch mark
+  function removeTree(t) {
+    var idx = TREES.indexOf(t);
+    if (idx < 0) return false;
+    TREES.splice(idx, 1);
+    var ci = CIRCS.indexOf(t.circ);
+    if (ci >= 0) CIRCS.splice(ci, 1);
+    t.gone = true;
+    t.shadow.col = [44, 34, 24];
+    t.shadow.a = 0.45;
+    t.shadow.pts = blobPts(t.x, t.z, 0.85 * t.s, 9, 0.016, 0.45);
+    return true;
+  }
+
+  function safeCount(v) {
+    if (typeof v !== "number" || !isFinite(v) || v < 0) return 0;
+    return Math.min(1000000000, Math.floor(v));
+  }
+
+  function loadProgress() {
+    var text = null;
+    try { text = localStorage.getItem(PROGRESS_KEY); } catch (e) { text = null; }
+    if (typeof text !== "string" || !text || text.length > 32000) return false;
+    var d;
+    try { d = JSON.parse(text); } catch (e) { return false; }
+    if (!d || typeof d !== "object" || d.v !== 1) return false;
+    var any = false;
+    if (Array.isArray(d.gone)) {
+      for (var i = 0; i < d.gone.length && i < 1000; i++) {
+        var id = d.gone[i];
+        if (typeof id !== "number" || id !== Math.floor(id) || id < 0 || id >= ALL_TREES.length) continue;
+        if (removeTree(ALL_TREES[id])) any = true;
+      }
+    }
+    cleared = safeCount(d.cleared);
+    var w = safeCount(d.wood);
+    if (w > 0) addItem(player, "wood", w);
+    return any || cleared > 0 || w > 0;
+  }
+
+  function resetValley() {
+    var i, t;
+    TREES.length = 0;
+    for (i = 0; i < ALL_TREES.length; i++) {
+      t = ALL_TREES[i];
+      t.gone = false;
+      t.shadow.pts = t.shadowPts0;
+      t.shadow.col = TREE_SHADOW_COL;
+      t.shadow.a = TREE_SHADOW_A;
+      TREES.push(t);
+      if (CIRCS.indexOf(t.circ) < 0) CIRCS.push(t.circ);
+    }
+    cleared = 0;
+    var it = findItem(player.inventory, "wood");
+    if (it) it.count = 0;
+    PARTS.length = 0; FX.length = 0; TRACERS.length = 0;
+    aim.tree = null;
+    collide();
+    updateTreeCount();
+    renderInventory();
+    saveProgress();
+  }
+
+  function setResetConfirm(open) {
+    window.gameTest.inputsHandled++;
+    resetOpen = !!open;
+    if (resetOpen) {
+      resetPanel.classList.remove("hidden");
+      freeCursor();
+    } else {
+      resetPanel.classList.add("hidden");
+    }
+  }
 
   var FACES = [[0, 2, 6, 4], [1, 3, 7, 5], [0, 1, 5, 4], [2, 3, 7, 6], [0, 1, 3, 2], [4, 5, 7, 6]];
   var LIGHT = (function () {
@@ -661,15 +764,8 @@
   }
 
   function blowUp(t) {
-    var idx = TREES.indexOf(t), i;
-    if (idx < 0) return;
-    TREES.splice(idx, 1);
-    var ci = CIRCS.indexOf(t.circ);
-    if (ci >= 0) CIRCS.splice(ci, 1);
-    // leave a scorch mark where the tree stood
-    t.shadow.col = [44, 34, 24];
-    t.shadow.a = 0.45;
-    t.shadow.pts = blobPts(t.x, t.z, 0.85 * t.s, 9, 0.016, 0.45);
+    var i;
+    if (!removeTree(t)) return;
 
     var s = t.s, cy = 1.6 * s, leaf = t.kind ? LEAF_B : LEAF_A;
     for (i = 0; i < 22; i++) {
@@ -690,6 +786,7 @@
     cleared++;
     updateTreeCount();
     addItem(player, "wood", 1);
+    saveProgress();
     music.sfx("boom");
   }
 
@@ -1182,6 +1279,11 @@
 
   document.addEventListener("keydown", function (e) {
     var key = String(e.key || "").toLowerCase();
+    if (key === "escape" && resetOpen) {
+      e.preventDefault();
+      setResetConfirm(false);
+      return;
+    }
     if (key === "i") {
       e.preventDefault();
       if (!e.repeat) setInventory(!invOpen);
@@ -1246,6 +1348,13 @@
   gunBtn.addEventListener("click", function () { setGun(!gunOn); gunBtn.blur(); });
   invBtn.addEventListener("click", function () { setInventory(!invOpen); invBtn.blur(); });
   invClose.addEventListener("click", function () { setInventory(false); invClose.blur(); });
+  resetBtn.addEventListener("click", function () { setResetConfirm(!resetOpen); resetBtn.blur(); });
+  resetNo.addEventListener("click", function () { setResetConfirm(false); resetNo.blur(); });
+  resetYes.addEventListener("click", function () {
+    resetValley();
+    setResetConfirm(false);
+    resetYes.blur();
+  });
 
   function setStick(x, y) {
     var dx = (x - stick.ox) / STICK_R, dy = (y - stick.oy) / STICK_R;
@@ -1264,7 +1373,7 @@
       fire();
       return;
     }
-    if (e.pointerType === "mouse" && !locked && !invOpen) requestLock();
+    if (e.pointerType === "mouse" && !locked && !invOpen && !resetOpen) requestLock();
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
     if (e.pointerType !== "mouse" && lx < r.width / 2 && stickId === null) {
       stickId = e.pointerId;
@@ -1306,6 +1415,9 @@
   document.addEventListener("visibilitychange", function () {
     if (document.hidden) storeAccount();
   });
+
+  // restore this browser's saved valley before the first frame
+  if (loadProgress() && overlayTitle) overlayTitle.textContent = "Welcome back to Mossvale";
 
   window.addEventListener("resize", resize);
   resize();

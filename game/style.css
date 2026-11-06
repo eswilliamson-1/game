@@ -6,7 +6,8 @@ h1 { font-size: 1rem; margin: 0; letter-spacing: 0.04em; white-space: nowrap; }
 #goal { order: 3; flex: 1 1 100%; margin: 0; color: #c9d4c0; font-size: 0.75rem; line-height: 1.25; }
 #hud { display: flex; flex-wrap: wrap; gap: 2px 10px; justify-content: center; align-items: center; font-size: 0.8rem; line-height: 1.2; color: #a9a59b; }
 #treeCount { white-space: nowrap; }
-#musicBtn, #gunBtn, #invBtn { font: inherit; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 6px; border: 1px solid #4a5c4f; background: #26322a; color: #e9e6df; cursor: pointer; touch-action: manipulation; }
+#musicBtn, #gunBtn, #invBtn, #resetBtn { font: inherit; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 6px; border: 1px solid #4a5c4f; background: #26322a; color: #e9e6df; cursor: pointer; touch-action: manipulation; }
+#resetBtn { border-color: #6a5a44; background: #2f2a22; }
 #gunBtn.on { background: #6a2e26; border-color: #b0574a; color: #ffe9e0; }
 #invBtn.on { background: #3d5a2e; border-color: #8cbf5e; color: #f0ffe0; }
 #stage { position: relative; flex: 1 1 auto; min-height: 180px; border-radius: 8px; overflow: hidden; background: #58884a; }
@@ -29,4 +30,12 @@ h1 { font-size: 1rem; margin: 0; letter-spacing: 0.04em; white-space: nowrap; }
 #invEmpty { margin: 0 0 8px; color: #b8bfae; font-size: 0.85rem; font-style: italic; }
 #invEmpty.hidden { display: none; }
 #invClose { font: inherit; font-size: 0.78rem; font-weight: 700; padding: 3px 12px; border-radius: 6px; border: 1px solid #4a5c4f; background: #26322a; color: #e9e6df; cursor: pointer; touch-action: manipulation; }
+#resetPanel { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 6; width: min(340px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow: auto; box-sizing: border-box; padding: 14px 16px; border-radius: 12px; border: 1px solid #b08a5e; background: rgba(28, 24, 18, 0.95); color: #e9e6df; text-align: center; user-select: none; -webkit-user-select: none; }
+#resetPanel.hidden { display: none; }
+#resetTitle { margin: 0 0 6px; font-weight: 700; font-size: 1.1rem; }
+#resetText { margin: 0 0 12px; font-size: 0.85rem; color: #d8cfbf; }
+#resetBtns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+#resetYes, #resetNo { font: inherit; font-size: 0.85rem; font-weight: 700; padding: 6px 16px; border-radius: 8px; cursor: pointer; touch-action: manipulation; }
+#resetYes { border: 1px solid #b0574a; background: #6a2e26; color: #ffe9e0; }
+#resetNo { border: 1px solid #4a5c4f; background: #26322a; color: #e9e6df; }
 .hint { margin: 0; text-align: center; font-size: 0.66rem; line-height: 1.2; color: #8f9a88; flex: 0 0 auto; }
