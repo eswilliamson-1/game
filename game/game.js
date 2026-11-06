@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var GOAL = "Explore Mossvale: find the old cottage, the pond, and the rocky ridge. Equip your pistol (G or the Pistol button) to blast trees out of your way.";
+  var GOAL = "Explore Mossvale: find the old cottage, the pond, and the rocky ridge. Equip your pistol (G or the Pistol button) to blast trees out of your way. Press I or the Inventory button to see what you carry.";
   window.gameTest = { inputsHandled: 0, goal: GOAL };
 
   var music = window.TechnoMusic || { start: function () {}, stop: function () {}, tick: function () {}, setMuted: function () {}, isMuted: function () { return true; }, sfx: function () {} };
@@ -15,6 +15,11 @@
   var startBtn = document.getElementById("startBtn");
   var musicBtn = document.getElementById("musicBtn");
   var gunBtn = document.getElementById("gunBtn");
+  var invBtn = document.getElementById("invBtn");
+  var invPanel = document.getElementById("invPanel");
+  var invList = document.getElementById("invList");
+  var invEmpty = document.getElementById("invEmpty");
+  var invClose = document.getElementById("invClose");
   var treeCountEl = document.getElementById("treeCount");
   var lockHint = document.getElementById("lockHint");
 
@@ -60,8 +65,9 @@
 
   // ---- deterministic random so the world is always the same ----
   var seed = 20240611;
+  var SEED_STEP = 1831565813;
   function rnd() {
-    seed = (seed + 0x6D2B79F5) | 0;
+    seed = (seed + SEED_STEP) | 0;
     var t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
@@ -231,7 +237,7 @@
     }
   })();
 
-  var player = { x: START_X, z: START_Z, yaw: 0, walk: 0, walkAmt: 0 };
+  var player = { x: START_X, z: START_Z, yaw: 0, walk: 0, walkAmt: 0, inventory: [] };
   var camYaw = 0;
   var cam = { x: 0, y: 0, z: 0, ct: 1, st: 0, cp: 1, sp: 0, f: 300, cx: 150, cy: 200 };
   var keys = {};
@@ -244,6 +250,72 @@
   var gunOn = false, gunCool = 0, gunKick = 0, shake = 0, cleared = 0;
   var PARTS = [], FX = [], TRACERS = [];
   var aim = { tree: null, d: SHOT_RANGE, x: 0, z: 0 };
+
+  // ---- inventory ----
+  var ITEM_NAMES = { pistol: "Pistol", wood: "Wood" };
+  var invOpen = false;
+
+  function findItem(inv, id) {
+    for (var i = 0; i < inv.length; i++) if (inv[i].id === id) return inv[i];
+    return null;
+  }
+
+  function addItem(who, id, n) {
+    var it = findItem(who.inventory, id);
+    if (it) it.count += n;
+    else who.inventory.push({ id: id, name: ITEM_NAMES[id] || id, count: n });
+    if (who === player) renderInventory();
+  }
+
+  function renderInventory() {
+    while (invList.firstChild) invList.removeChild(invList.firstChild);
+    var shown = 0;
+    for (var i = 0; i < player.inventory.length; i++) {
+      var it = player.inventory[i];
+      if (it.count <= 0) continue;
+      var li = document.createElement("li");
+      var nm = document.createElement("span");
+      nm.className = "invName";
+      nm.textContent = it.name;
+      var ct = document.createElement("span");
+      ct.className = "invCount";
+      ct.textContent = "x " + it.count;
+      li.appendChild(nm);
+      li.appendChild(ct);
+      invList.appendChild(li);
+      shown++;
+    }
+    if (shown === 0) {
+      invEmpty.classList.remove("hidden");
+      invList.classList.add("hidden");
+    } else {
+      invEmpty.classList.add("hidden");
+      invList.classList.remove("hidden");
+    }
+  }
+
+  function updateInvBtn() {
+    invBtn.textContent = invOpen ? "Inventory: Open" : "Inventory";
+    if (invOpen) invBtn.classList.add("on");
+    else invBtn.classList.remove("on");
+  }
+
+  function setInventory(open) {
+    window.gameTest.inputsHandled++;
+    invOpen = !!open;
+    if (invOpen) {
+      renderInventory();
+      invPanel.classList.remove("hidden");
+      if (locked && typeof document.exitPointerLock === "function") {
+        try { document.exitPointerLock(); } catch (err) { /* ignore */ }
+      }
+    } else {
+      invPanel.classList.add("hidden");
+    }
+    updateInvBtn();
+  }
+
+  addItem(player, "pistol", 1);
 
   var FACES = [[0, 2, 6, 4], [1, 3, 7, 5], [0, 1, 5, 4], [2, 3, 7, 6], [0, 1, 3, 2], [4, 5, 7, 6]];
   var LIGHT = (function () {
@@ -545,6 +617,7 @@
     shake = 0.35;
     cleared++;
     updateTreeCount();
+    addItem(player, "wood", 1);
     music.sfx("boom");
   }
 
@@ -1037,6 +1110,16 @@
 
   document.addEventListener("keydown", function (e) {
     var key = String(e.key || "").toLowerCase();
+    if (key === "i") {
+      e.preventDefault();
+      if (!e.repeat) setInventory(!invOpen);
+      return;
+    }
+    if (key === "escape" && invOpen) {
+      e.preventDefault();
+      setInventory(false);
+      return;
+    }
     if (MOVE_KEYS[key]) {
       e.preventDefault();
       if (state !== "play") startGame();
@@ -1089,6 +1172,8 @@
 
   musicBtn.addEventListener("click", function () { toggleMusic(); musicBtn.blur(); });
   gunBtn.addEventListener("click", function () { setGun(!gunOn); gunBtn.blur(); });
+  invBtn.addEventListener("click", function () { setInventory(!invOpen); invBtn.blur(); });
+  invClose.addEventListener("click", function () { setInventory(false); invClose.blur(); });
 
   function setStick(x, y) {
     var dx = (x - stick.ox) / STICK_R, dy = (y - stick.oy) / STICK_R;
@@ -1107,7 +1192,7 @@
       fire();
       return;
     }
-    if (e.pointerType === "mouse" && !locked) requestLock();
+    if (e.pointerType === "mouse" && !locked && !invOpen) requestLock();
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
     if (e.pointerType !== "mouse" && lx < r.width / 2 && stickId === null) {
       stickId = e.pointerId;
@@ -1148,6 +1233,8 @@
   resize();
   updateMusicBtn();
   updateGunBtn();
+  updateInvBtn();
   updateTreeCount();
+  renderInventory();
   requestAnimationFrame(frame);
 })();

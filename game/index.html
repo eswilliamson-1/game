@@ -14,6 +14,7 @@
       <div id="hud">
         <span id="treeCount">Trees cleared: 0</span>
         <button id="gunBtn" type="button">Pistol: Holstered</button>
+        <button id="invBtn" type="button">Inventory</button>
         <button id="musicBtn" type="button">Music: On</button>
       </div>
     </header>
@@ -25,8 +26,14 @@
         <p id="overlayText">A quiet green valley waits to be explored. Walk your little wanderer anywhere you like: through meadows and groves, along dirt paths, past an old cottage, a still pond, and a rocky ridge. Rocks, water, and the old stone walls block your way. Trees do too, unless you draw your pistol and blast them out of the way.</p>
         <button id="startBtn" type="button">Start exploring</button>
       </div>
+      <div id="invPanel" class="hidden">
+        <p id="invTitle">Inventory</p>
+        <ul id="invList"></ul>
+        <p id="invEmpty" class="hidden">Your inventory is empty.</p>
+        <button id="invClose" type="button">Close</button>
+      </div>
     </div>
-    <p class="hint">Walk: WASD or arrow keys, or drag on the left half of the view. Turn camera: Q / E, drag the view, or click the view on desktop for mouse look (Esc frees the cursor). Pistol: G or the Pistol button to equip, aim with the camera, fire with F, Space, a click, or a tap on the view. M toggles music.</p>
+    <p class="hint">Walk: WASD or arrow keys, or drag on the left half of the view. Turn camera: Q / E, drag the view, or click the view on desktop for mouse look (Esc frees the cursor). Pistol: G or the Pistol button to equip, aim with the camera, fire with F, Space, a click, or a tap on the view. Inventory: I or the Inventory button. M toggles music.</p>
   </main>
   <script src="music.js"></script>
   <script src="game.js"></script>
