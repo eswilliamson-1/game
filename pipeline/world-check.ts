@@ -1,6 +1,6 @@
 // Tries shared play on the live site with two throwaway logged-in players, then deletes
 // them. It's the only check that holds the service key, and only to make those accounts.
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
 
 const URL_BASE = process.env.SUPABASE_URL!;
@@ -40,7 +40,10 @@ const joined = (channel: RealtimeChannel) =>
   });
 
 const room = (client: SupabaseClient, heard: unknown[], isPrivate = true) =>
-  client.channel("world", { config: { private: isPrivate } }).on("broadcast", { event: "move" }, ({ payload }) => heard.push(payload));
+  client
+    .channel("world", { config: { private: isPrivate, presence: { key: randomUUID() } } })
+    .on("broadcast", { event: "move" }, ({ payload }) => heard.push(payload))
+    .on("presence", { event: "sync" }, () => {});
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -71,7 +74,13 @@ try {
   check("Strangers can't join the live room", strangerStatus !== "SUBSCRIBED", strangerStatus);
   await joined(openRoom);
 
-  await wait(1000);
+  await Promise.all([aliceRoom.track({}), bobRoom.track({})]);
+  await wait(2000);
+  const present = bobRoom.presenceState();
+  check("Players can tell someone else is online", Object.keys(present).length === 2, `${Object.keys(present).length} present`);
+  const shown = Object.values(present).flat().flatMap((entry) => Object.keys(entry));
+  check("Being online shows nothing about the account", shown.every((key) => key === "presence_ref"), shown.join());
+
   await aliceRoom.send({ type: "broadcast", event: "move", payload: { x: 5 } });
   await wait(3000);
   check("Logged-in players hear each other", bobHeard.length === 1, `${bobHeard.length} heard`);
