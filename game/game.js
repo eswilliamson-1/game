@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var GOAL = "Sort each shape into its matching bin before it reaches the end of the belt. Gold shapes are worth 3 points. Every 10 correct sorts in a row earns a +2 streak bonus. Three mistakes ends the round. Walk your bot and turn the camera to look around.";
+  var GOAL = "Explore the valley of Mossvale: roam freely and find the old cottage, the pond, and the rocky ridge.";
   window.gameTest = { inputsHandled: 0, goal: GOAL };
 
   var music = window.TechnoMusic || { start: function () {}, stop: function () {}, tick: function () {}, setMuted: function () {}, isMuted: function () { return true; } };
@@ -10,17 +10,8 @@
   var ctx = canvas.getContext("2d");
   var stage = document.getElementById("stage");
   var goalEl = document.getElementById("goal");
-  var scoreEl = document.getElementById("score");
-  var bestEl = document.getElementById("best");
-  var missEl = document.getElementById("miss");
-  var streakEl = document.getElementById("streak");
   var overlay = document.getElementById("overlay");
-  var overlayTitle = document.getElementById("overlayTitle");
-  var overlayText = document.getElementById("overlayText");
   var startBtn = document.getElementById("startBtn");
-  var binLeft = document.getElementById("binLeft");
-  var binMid = document.getElementById("binMid");
-  var binRight = document.getElementById("binRight");
   var musicBtn = document.getElementById("musicBtn");
   var lockHint = document.getElementById("lockHint");
 
@@ -36,43 +27,194 @@
     updateMusicBtn();
   }
 
-  // Type index = side + 1 (left = 0, middle = 1, right = 2)
-  var TYPES = [
-    { name: "circle", color: "hsl(28, 92%, 60%)", rgb: [245, 150, 60], side: -1, label: "CIRCLES" },
-    { name: "triangle", color: "hsl(325, 70%, 62%)", rgb: [226, 90, 160], side: 0, label: "TRIANGLES" },
-    { name: "square", color: "hsl(180, 60%, 45%)", rgb: [46, 184, 184], side: 1, label: "SQUARES" }
-  ];
-
-  var GOLD = "rgb(255,212,70)";
-  var GOLD_CHANCE = 1 / 15;
-  var STREAK_EVERY = 10, STREAK_BONUS = 2;
-
   var SCALE = 2;
   var W = 300, H = 400;
 
-  // ---- world layout (x right, y up, z forward) ----
-  var BELT_HW = 0.8, BELT_H = 0.5, BELT_START = 17, BELT_END = 5, BELT_LEN = BELT_START - BELT_END;
-  var SHAPE_Y = BELT_H + 0.95, SHAPE_R = 0.8;
-  var BIN_Z = 3, BIN_HW = 1.0, BIN_HH = 0.45, BIN_HD = 0.75, BIN_GAP = 3.2;
-  var ARENA = { x0: -15, x1: 15, z0: -11, z1: 23 };
-  var START_X = 0, START_Z = -2;
+  // ---- tuning (x right, y up, z forward/north) ----
+  var WORLD = { x0: -32, x1: 32, z0: -32, z1: 32 };
+  var START_X = 0, START_Z = -6;
   var PLAYER_R = 0.45, MOVE_SPEED = 5, TURN_SPEED = 2.2, DRAG_TURN = 0.0085;
   var MOUSE_TURN = 0.0026, MOUSE_MAX_STEP = 250;
   var CAM_BACK = 5.5, CAM_UP = 4.2, LOOK_AHEAD = 4, LOOK_Y = 0.5;
   var CAM_PITCH = Math.atan2(CAM_UP - LOOK_Y, CAM_BACK + LOOK_AHEAD);
   var NEAR = 0.2;
   var STICK_R = 50;
+  var DRAW_DIST = 52;
 
-  var CRATES = [[-7, 8, 0.6], [-8.4, 8.4, 0.5], [-7.6, 9.7, 0.45], [7.5, 11, 0.7], [8.9, 10.1, 0.5], [-10, -4, 0.6], [9, -5, 0.55], [4, -8, 0.5], [-4, 15, 0.6], [5, 18, 0.7], [-12, 14, 0.6], [12, 2, 0.6]];
-  var PILLARS = [[-13, -9], [13, -9], [-13, 21], [13, 21], [-13, 6], [13, 6]];
+  // ---- colors ----
+  var HAZE = [184, 206, 216];
+  var GRASS = [88, 138, 70];
+  var PATH_COL = [170, 142, 100], SHORE_COL = [198, 182, 132], WATER_COL = [64, 124, 168];
+  var TRUNK = [112, 80, 52], LEAF_A = [66, 132, 66], LEAF_A2 = [92, 156, 78], LEAF_B = [46, 104, 64];
+  var ROCK_COLS = [[128, 128, 124], [112, 114, 116], [140, 134, 124]];
+  var STONE = [124, 122, 116], STONE_TOP = [146, 144, 136];
+  var HUT_WALL = [200, 174, 132], HUT_ROOF = [152, 72, 58], HUT_DOOR = [92, 62, 40], HUT_WIN = [130, 178, 205];
+  var WOOD = [134, 98, 62];
+  var AV_BODY = [150, 122, 215], AV_HEAD = [226, 222, 210], AV_DARK = [34, 38, 50];
+  var AV_EYE = [120, 230, 255], AV_LEG = [84, 90, 108], AV_GOLD = [255, 212, 70];
 
-  var OBST = (function () {
-    var o = [], i, c;
-    o.push({ x0: -BELT_HW, x1: BELT_HW, z0: BELT_END, z1: BELT_START });
-    for (i = -1; i <= 1; i++) o.push({ x0: i * BIN_GAP - BIN_HW, x1: i * BIN_GAP + BIN_HW, z0: BIN_Z - BIN_HD, z1: BIN_Z + BIN_HD });
-    for (i = 0; i < CRATES.length; i++) { c = CRATES[i]; o.push({ x0: c[0] - c[2], x1: c[0] + c[2], z0: c[1] - c[2], z1: c[1] + c[2] }); }
-    for (i = 0; i < PILLARS.length; i++) { c = PILLARS[i]; o.push({ x0: c[0] - 0.5, x1: c[0] + 0.5, z0: c[1] - 0.5, z1: c[1] + 0.5 }); }
-    return o;
+  // ---- deterministic random so the world is always the same ----
+  var seed = 20240611;
+  function rnd() {
+    seed = (seed + 0x6D2B79F5) | 0;
+    var t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+
+  function distSeg(px, pz, ax, az, bx, bz) {
+    var dx = bx - ax, dz = bz - az, l = dx * dx + dz * dz;
+    var t = l > 0 ? ((px - ax) * dx + (pz - az) * dz) / l : 0;
+    t = Math.max(0, Math.min(1, t));
+    var qx = ax + dx * t - px, qz = az + dz * t - pz;
+    return Math.sqrt(qx * qx + qz * qz);
+  }
+
+  // ---- world layout ----
+  var PATH_HW = 0.9;
+  var PATHS = [[0, -31, 0, 2], [0, 2, 8, 5.5], [0, 2, -6, 2.5], [-6, 2.5, -9, 6.5], [0, 2, 12, -4], [12, -4, 24, -10]];
+  var POND = { x: -15, z: 13, r: 5.6 };
+  function pondR(a) { return POND.r + 0.7 * Math.sin(3 * a + 0.5) + 0.4 * Math.sin(5 * a + 1.3); }
+  var HUT = { x: 8, z: 9, hx: 2.4, hz: 2, h: 1.7 };
+  var SIGN = { x: 2, z: -1 };
+
+  var RECTS = [], CIRCS = [], TREES = [], ROCKS = [], RIDGE = [], WALLS = [];
+  var GROUND = [], FLOWERS = [], SHADOWS = [];
+  var POND_PTS = [];
+
+  function blobPts(cx, cz, r, n, y, jit) {
+    var p = [], i, a, rr;
+    for (i = 0; i < n; i++) {
+      a = i / n * Math.PI * 2;
+      rr = r * (1 + (jit ? (rnd() - 0.5) * jit : 0));
+      p.push([cx + Math.cos(a) * rr, y, cz + Math.sin(a) * rr]);
+    }
+    return p;
+  }
+
+  function isClear(x, z, m) {
+    var i, d, dx, dz;
+    if (x < WORLD.x0 + 2 || x > WORLD.x1 - 2 || z < WORLD.z0 + 2 || z > WORLD.z1 - 2) return false;
+    for (i = 0; i < PATHS.length; i++) {
+      var p = PATHS[i];
+      if (distSeg(x, z, p[0], p[1], p[2], p[3]) < PATH_HW + m) return false;
+    }
+    dx = x - POND.x; dz = z - POND.z;
+    if (Math.sqrt(dx * dx + dz * dz) < POND.r + 1.8 + m) return false;
+    if (x > HUT.x - HUT.hx - m - 1 && x < HUT.x + HUT.hx + m + 1 && z > HUT.z - HUT.hz - m - 1.5 && z < HUT.z + HUT.hz + m + 1) return false;
+    dx = x - SIGN.x; dz = z - SIGN.z;
+    if (dx * dx + dz * dz < (1.5 + m) * (1.5 + m)) return false;
+    dx = x - START_X; dz = z - START_Z;
+    if (dx * dx + dz * dz < 16) return false;
+    for (i = 0; i < RIDGE.length; i++) {
+      dx = x - RIDGE[i][0]; dz = z - RIDGE[i][1];
+      d = RIDGE[i][2] + m + 0.8;
+      if (dx * dx + dz * dz < d * d) return false;
+    }
+    for (i = 0; i < ROCKS.length; i++) {
+      dx = x - ROCKS[i].x; dz = z - ROCKS[i].z;
+      d = ROCKS[i].s + m + 0.6;
+      if (dx * dx + dz * dz < d * d) return false;
+    }
+    for (i = 0; i < TREES.length; i++) {
+      dx = x - TREES[i].x; dz = z - TREES[i].z;
+      if (dx * dx + dz * dz < 2.4 * 2.4) return false;
+    }
+    return true;
+  }
+
+  (function buildWorld() {
+    var i, x, z, s, h;
+    RECTS.push({ x0: HUT.x - HUT.hx, x1: HUT.x + HUT.hx, z0: HUT.z - HUT.hz, z1: HUT.z + HUT.hz });
+    CIRCS.push({ x: SIGN.x, z: SIGN.z, r: 0.2 });
+
+    // rocky ridge with a narrow pass through the middle
+    for (i = 0; i < 11; i++) {
+      if (i === 5 || i === 6) continue;
+      s = 0.9 + rnd() * 0.5; h = 1.2 + rnd() * 1.6;
+      x = 12 + i * 1.6; z = 15 + i * 0.95 + (rnd() - 0.5) * 0.5;
+      RIDGE.push([x, z, s, h, ROCK_COLS[i % 3]]);
+      RECTS.push({ x0: x - s, x1: x + s, z0: z - s, z1: z + s });
+    }
+
+    // scattered rocks
+    for (i = 0; i < 60 && ROCKS.length < 16; i++) {
+      x = WORLD.x0 + rnd() * (WORLD.x1 - WORLD.x0);
+      z = WORLD.z0 + rnd() * (WORLD.z1 - WORLD.z0);
+      s = 0.3 + rnd() * 0.5;
+      if (!isClear(x, z, s + 0.4)) continue;
+      h = s * (0.6 + rnd() * 0.5);
+      ROCKS.push({ x: x, z: z, s: s, h: h, col: ROCK_COLS[Math.floor(rnd() * 3) % 3] });
+      RECTS.push({ x0: x - s, x1: x + s, z0: z - s, z1: z + s });
+    }
+
+    // trees: some scattered, some in small groves
+    var groves = [[-22, -18], [20, -22], [-22, 24], [24, 2], [-24, -2]];
+    for (i = 0; i < 260 && TREES.length < 54; i++) {
+      if (i % 2 === 0) {
+        x = WORLD.x0 + rnd() * (WORLD.x1 - WORLD.x0);
+        z = WORLD.z0 + rnd() * (WORLD.z1 - WORLD.z0);
+      } else {
+        var g = groves[Math.floor(rnd() * groves.length) % groves.length];
+        x = g[0] + (rnd() - 0.5) * 14;
+        z = g[1] + (rnd() - 0.5) * 14;
+      }
+      if (!isClear(x, z, 1.0)) continue;
+      s = 0.8 + rnd() * 0.5;
+      var t = { x: x, z: z, s: s, kind: rnd() < 0.45 ? 1 : 0 };
+      TREES.push(t);
+      CIRCS.push({ x: x, z: z, r: 0.25 + 0.15 * s });
+      SHADOWS.push({ pts: blobPts(x + 0.25, z - 0.2, 1.1 * s, 8, 0.015, 0), col: [20, 40, 20], a: 0.22, x: x, z: z });
+    }
+
+    // boundary stone walls
+    for (i = 0; i < 16; i++) {
+      var c = WORLD.x0 + 2 + i * 4;
+      WALLS.push([c, WORLD.z1, 2, 0.4 + rnd() * 0.15, 0.25]);
+      WALLS.push([c, WORLD.z0, 2, 0.4 + rnd() * 0.15, 0.25]);
+      WALLS.push([WORLD.x0, c, 0.25, 0.4 + rnd() * 0.15, 2]);
+      WALLS.push([WORLD.x1, c, 0.25, 0.4 + rnd() * 0.15, 2]);
+    }
+
+    // meadow patches
+    for (i = 0; i < 14; i++) {
+      x = WORLD.x0 + 4 + rnd() * (WORLD.x1 - WORLD.x0 - 8);
+      z = WORLD.z0 + 4 + rnd() * (WORLD.z1 - WORLD.z0 - 8);
+      var r = 2 + rnd() * 3;
+      GROUND.push({ pts: blobPts(x, z, r, 10, 0.004, 0.5), col: i % 2 ? [104, 154, 78] : [74, 120, 60], a: 1, x: x, z: z, r: r });
+    }
+
+    // paths with rounded joints
+    for (i = 0; i < PATHS.length; i++) {
+      var p = PATHS[i];
+      var dx = p[2] - p[0], dz = p[3] - p[1], l = Math.sqrt(dx * dx + dz * dz) || 1;
+      var nx = -dz / l * PATH_HW, nz = dx / l * PATH_HW, y = 0.008;
+      GROUND.push({ pts: [[p[0] + nx, y, p[1] + nz], [p[2] + nx, y, p[3] + nz], [p[2] - nx, y, p[3] - nz], [p[0] - nx, y, p[1] - nz]], col: PATH_COL, a: 1, x: (p[0] + p[2]) / 2, z: (p[1] + p[3]) / 2, r: 0 });
+      GROUND.push({ pts: blobPts(p[2], p[3], PATH_HW, 10, 0.009, 0), col: PATH_COL, a: 1, x: p[2], z: p[3], r: 1 });
+    }
+
+    // pond: sandy shore then water
+    var shore = [];
+    for (i = 0; i < 24; i++) {
+      var a = i / 24 * Math.PI * 2, rr = pondR(a);
+      shore.push([POND.x + Math.cos(a) * (rr + 1.0), 0.01, POND.z + Math.sin(a) * (rr + 1.0)]);
+      POND_PTS.push([POND.x + Math.cos(a) * rr, 0.02, POND.z + Math.sin(a) * rr]);
+    }
+    GROUND.push({ pts: shore, col: SHORE_COL, a: 1, x: POND.x, z: POND.z, r: 0 });
+    GROUND.push({ pts: POND_PTS, col: WATER_COL, a: 1, x: POND.x, z: POND.z, r: 0 });
+
+    // little flower clusters
+    var fcols = [[240, 214, 90], [232, 140, 182], [244, 244, 236]];
+    for (i = 0; i < 40 && FLOWERS.length < 70; i++) {
+      x = WORLD.x0 + 3 + rnd() * (WORLD.x1 - WORLD.x0 - 6);
+      z = WORLD.z0 + 3 + rnd() * (WORLD.z1 - WORLD.z0 - 6);
+      if (!isClear(x, z, 0)) continue;
+      var fc = fcols[i % 3];
+      for (var k = 0; k < 7; k++) {
+        var fx = x + (rnd() - 0.5) * 2.4, fz = z + (rnd() - 0.5) * 2.4, fs = 0.09;
+        FLOWERS.push({ pts: [[fx - fs, 0.02, fz - fs], [fx + fs, 0.02, fz - fs], [fx + fs, 0.02, fz + fs], [fx - fs, 0.02, fz + fs]], col: fc, a: 1, x: fx, z: fz });
+      }
+    }
   })();
 
   var player = { x: START_X, z: START_Z, yaw: 0, walk: 0, walkAmt: 0 };
@@ -81,43 +223,23 @@
   var keys = {};
   var stick = null, stickId = null, lookers = {};
   var locked = false;
-
   var state = "ready";
-  var score = 0, best = 0, miss = 0;
-  var streak = 0, longest = 0, streakT = 0;
-  var shape = null;
-  var spawnDelay = 0;
-  var fliers = [];
-  var flash = 0, flashGood = true, flashGold = false;
-  var msg = "", msgT = 0, msgColor = "rgb(120,230,150)", msgGold = false;
-  var beltOffset = 0;
-  var lastType = -1, sameCount = 0;
   var glowT = 0;
 
-  // ---- the player's sorter bot ----
-  var AV = { pointT: 0, side: 1, hop: 0, hurt: 0 };
   var FACES = [[0, 2, 6, 4], [1, 3, 7, 5], [0, 1, 5, 4], [2, 3, 7, 6], [0, 1, 3, 2], [4, 5, 7, 6]];
   var LIGHT = (function () {
     var x = -0.45, y = 0.8, z = -0.4, m = Math.sqrt(x * x + y * y + z * z);
     return [x / m, y / m, z / m];
   })();
-  var AV_BODY = [150, 122, 215], AV_HEAD = [226, 222, 210], AV_DARK = [34, 38, 50];
-  var AV_EYE = [120, 230, 255], AV_LEG = [84, 90, 108], AV_GOLD = [255, 212, 70];
-  var CRATE_COL = [150, 112, 72], CRATE_TOP = [178, 138, 94];
-  var PILLAR_COL = [78, 84, 100], PILLAR_TOP = [100, 106, 122];
-  var BELT_SIDE = [70, 75, 88], BELT_FRONT = [160, 70, 70], BIN_TOP = [22, 24, 30];
 
-  function avatarPoint(dir) { AV.side = dir; AV.pointT = 1; }
-
-  function updateAvatar(dt) {
-    if (AV.pointT > 0) AV.pointT = Math.max(0, AV.pointT - dt / 0.45);
-    if (AV.hop > 0) AV.hop = Math.max(0, AV.hop - dt / 0.35);
-    if (AV.hurt > 0) AV.hurt = Math.max(0, AV.hurt - dt / 0.5);
-  }
-
-  function tint(col, h) {
-    var m = h * 0.6;
-    return [col[0] + (235 - col[0]) * m, col[1] + (70 - col[1]) * m, col[2] + (70 - col[2]) * m];
+  function fogStr(col, sh, dist, a) {
+    var f = (dist - 22) / 28;
+    f = f < 0 ? 0 : (f > 0.92 ? 0.92 : f);
+    var r = Math.round(col[0] * sh * (1 - f) + HAZE[0] * f);
+    var g = Math.round(col[1] * sh * (1 - f) + HAZE[1] * f);
+    var b = Math.round(col[2] * sh * (1 - f) + HAZE[2] * f);
+    if (a === undefined || a >= 1) return "rgb(" + r + "," + g + "," + b + ")";
+    return "rgba(" + r + "," + g + "," + b + "," + a + ")";
   }
 
   // ---- camera + projection ----
@@ -159,7 +281,7 @@
     return pts;
   }
 
-  function addFace(list, a, b, c, d, nx, ny, nz, col) {
+  function addFace(list, a, b, c, d, nx, ny, nz, col, bias) {
     var fx = (a[0] + b[0] + c[0] + d[0]) * 0.25;
     var fy = (a[1] + b[1] + c[1] + d[1]) * 0.25;
     var fz = (a[2] + b[2] + c[2] + d[2]) * 0.25;
@@ -169,14 +291,12 @@
     if (!pts) return;
     var nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
     var lit = (nx * LIGHT[0] + ny * LIGHT[1] + nz * LIGHT[2]) / nl;
-    var sh = 0.42 + 0.58 * Math.max(0, lit);
-    list.push({
-      k: 0, pts: pts, d: vx * vx + vy * vy + vz * vz,
-      col: "rgb(" + Math.round(col[0] * sh) + "," + Math.round(col[1] * sh) + "," + Math.round(col[2] * sh) + ")"
-    });
+    var sh = 0.45 + 0.55 * Math.max(0, lit);
+    var d2 = vx * vx + vy * vy + vz * vz;
+    list.push({ k: 0, pts: pts, d: d2 * (bias || 1), col: fogStr(col, sh, Math.sqrt(d2)) });
   }
 
-  function addBoxVerts(list, v, col, topCol) {
+  function addBoxVerts(list, v, col, topCol, bias) {
     var cx = 0, cy = 0, cz = 0, i;
     for (i = 0; i < 8; i++) { cx += v[i][0]; cy += v[i][1]; cz += v[i][2]; }
     cx /= 8; cy /= 8; cz /= 8;
@@ -186,13 +306,13 @@
       var nx = (a[0] + b[0] + c[0] + d[0]) * 0.25 - cx;
       var ny = (a[1] + b[1] + c[1] + d[1]) * 0.25 - cy;
       var nz = (a[2] + b[2] + c[2] + d[2]) * 0.25 - cz;
-      addFace(list, a, b, c, d, nx, ny, nz, (f === 3 && topCol) ? topCol : col);
+      addFace(list, a, b, c, d, nx, ny, nz, (f === 3 && topCol) ? topCol : col, bias);
     }
   }
 
-  function addBoxW(list, cx, cy, cz, hx, hy, hz, col, topCol) {
+  function addBoxW(list, cx, cy, cz, hx, hy, hz, col, topCol, bias) {
     var dx = cx - cam.x, dy = cy - cam.y, dz = cz - cam.z;
-    if (dx * dx + dy * dy + dz * dz > 75 * 75) return;
+    if (dx * dx + dz * dz > DRAW_DIST * DRAW_DIST) return;
     var r = Math.max(hx, hy, hz) * 1.8;
     var zc = (dx * cam.st + dz * cam.ct) * cam.cp - dy * cam.sp;
     if (zc < -r) return;
@@ -200,7 +320,7 @@
     for (var i = 0; i < 8; i++) {
       v.push([cx + ((i & 1) ? hx : -hx), cy + ((i & 2) ? hy : -hy), cz + ((i & 4) ? hz : -hz)]);
     }
-    addBoxVerts(list, v, col, topCol);
+    addBoxVerts(list, v, col, topCol, bias);
   }
 
   function botBox(list, g, cx, cy, cz, hx, hy, hz, col, px, py, rz, rx) {
@@ -223,18 +343,10 @@
         y = py + dy * cxr - z * sxr;
         z = nz;
       }
-      x += g.ox; y += g.oy;
+      y += g.oy;
       v.push([g.px + x * g.c + z * g.s, y, g.pz - x * g.s + z * g.c]);
     }
-    addBoxVerts(list, v, tint(col, g.hurt), null);
-  }
-
-  function addShapeBB(list, type, x, y, z, R, alpha, gold) {
-    var cp = toCam(x, y, z);
-    if (cp[2] < NEAR + 0.1) return;
-    var s = cam.f / cp[2];
-    var dx = x - cam.x, dy = y - cam.y, dz = z - cam.z;
-    list.push({ k: 1, type: type, gold: gold, a: alpha, sx: cam.cx + cp[0] * s, sy: cam.cy - cp[1] * s, r: Math.min(R * s, H), d: (dx * dx + dy * dy + dz * dz) * 0.97 });
+    addBoxVerts(list, v, col, null);
   }
 
   function addTextBB(list, text, x, y, z, size, color) {
@@ -244,7 +356,7 @@
     var fs = size * s;
     if (fs < 6) return;
     var dx = x - cam.x, dy = y - cam.y, dz = z - cam.z;
-    list.push({ k: 2, text: text, color: color, fs: Math.min(fs, 60), sx: cam.cx + cp[0] * s, sy: cam.cy - cp[1] * s, d: dx * dx + dy * dy + dz * dz });
+    list.push({ k: 2, text: text, color: color, fs: Math.min(fs, 48), sx: cam.cx + cp[0] * s, sy: cam.cy - cp[1] * s, d: (dx * dx + dy * dy + dz * dz) * 0.9 });
   }
 
   function resize() {
@@ -254,17 +366,6 @@
     canvas.width = Math.round(W * SCALE);
     canvas.height = Math.round(H * SCALE);
     ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
-  }
-
-  function rate() { return (0.2 + Math.min(score, 60) * 0.017) / 0.74; }
-
-  function shapePos(p) { return { x: 0, y: SHAPE_Y, z: BELT_START - p * BELT_LEN }; }
-
-  function updateHud() {
-    scoreEl.textContent = String(score);
-    bestEl.textContent = String(best);
-    missEl.textContent = String(miss);
-    if (streakEl) streakEl.textContent = String(streak);
   }
 
   // ---- pointer lock (desktop mouse look) ----
@@ -284,22 +385,13 @@
     } catch (err) { /* refused: drag-to-turn still works */ }
   }
 
-  function releaseLock() {
-    if (isLocked() && typeof document.exitPointerLock === "function") {
-      try { document.exitPointerLock(); } catch (err) { /* ignore */ }
-    }
-  }
-
   function onLockChange() {
     locked = isLocked();
     if (lockHint) {
       if (locked) lockHint.classList.remove("hidden");
       else lockHint.classList.add("hidden");
     }
-    if (locked) {
-      lookers = {};
-      if (state !== "play") releaseLock();
-    }
+    if (locked) lookers = {};
   }
 
   document.addEventListener("pointerlockchange", onLockChange);
@@ -319,104 +411,12 @@
     }
   });
 
-  function spawn() {
-    var n = TYPES.length;
-    var t = Math.floor(Math.random() * n);
-    if (t >= n) t = n - 1;
-    if (t === lastType) {
-      sameCount++;
-      if (sameCount >= 2) {
-        t = (t + 1 + Math.floor(Math.random() * (n - 1))) % n;
-        sameCount = 0;
-      }
-    } else {
-      sameCount = 0;
-    }
-    lastType = t;
-    shape = { type: t, p: 0, gold: Math.random() < GOLD_CHANCE };
-  }
-
-  function startRound() {
-    score = 0; miss = 0; shape = null; fliers = [];
-    streak = 0; longest = 0; streakT = 0;
-    spawnDelay = 0.5; msg = ""; msgT = 0; flash = 0;
-    lastType = -1; sameCount = 0;
-    AV.pointT = 0; AV.hop = 0; AV.hurt = 0;
-    player.x = START_X; player.z = START_Z; player.yaw = 0;
-    camYaw = 0;
+  function startGame() {
+    if (state === "play") return;
     state = "play";
     overlay.classList.add("hidden");
     startBtn.blur();
-    updateHud();
     music.start();
-  }
-
-  function endRound() {
-    state = "over";
-    releaseLock();
-    music.stop();
-    streakT = 0;
-    if (score > best) best = score;
-    updateHud();
-    overlayTitle.textContent = "Round over";
-    overlayText.textContent = "You scored " + score + " points. Longest streak: " + longest + ". Session best: " + best + ".";
-    startBtn.textContent = "Play again";
-    overlay.classList.remove("hidden");
-  }
-
-  function showMsg(text, good, gold) {
-    msg = text; msgT = gold ? 0.9 : 0.7;
-    msgGold = !!gold;
-    msgColor = gold ? GOLD : (good ? "rgb(120,230,150)" : "rgb(255,120,120)");
-    flash = 0.35; flashGood = good; flashGold = !!gold;
-  }
-
-  function mistake(text) {
-    miss++;
-    streak = 0;
-    AV.hurt = 1;
-    showMsg(text, false, false);
-    updateHud();
-    if (miss >= 3) endRound();
-  }
-
-  function binButton(dir) {
-    return dir < 0 ? binLeft : (dir > 0 ? binRight : binMid);
-  }
-
-  function pressVisual(dir) {
-    var b = binButton(dir);
-    b.classList.add("pressed");
-    setTimeout(function () { b.classList.remove("pressed"); }, 110);
-  }
-
-  function sort(dir) {
-    if (state !== "play") return;
-    window.gameTest.inputsHandled++;
-    pressVisual(dir);
-    avatarPoint(dir);
-    if (!shape) return;
-    var t = TYPES[shape.type];
-    var gold = !!shape.gold;
-    var sp = shapePos(shape.p);
-    fliers.push({ type: shape.type, gold: gold, sx: sp.x, sy: sp.y, sz: sp.z, tx: dir * BIN_GAP, ty: BIN_HH * 2 + 0.15, tz: BIN_Z, t: 0, fall: false });
-    shape = null;
-    spawnDelay = Math.max(0.08, 0.3 - score * 0.004);
-    if (t.side === dir) {
-      score += gold ? 3 : 1;
-      streak++;
-      if (streak > longest) longest = streak;
-      if (streak % STREAK_EVERY === 0) {
-        score += STREAK_BONUS;
-        streakT = 1.1;
-      }
-      if (score > best) best = score;
-      AV.hop = 1;
-      showMsg(gold ? "+3" : "+1", true, gold);
-      updateHud();
-    } else {
-      mistake("Wrong bin!");
-    }
   }
 
   // ---- movement ----
@@ -428,15 +428,16 @@
   }
 
   function collide() {
-    var R = PLAYER_R;
-    for (var i = 0; i < OBST.length; i++) {
-      var o = OBST[i];
+    var R = PLAYER_R, i, dx, dz, d2, d;
+    for (i = 0; i < RECTS.length; i++) {
+      var o = RECTS[i];
       var qx = Math.max(o.x0, Math.min(o.x1, player.x));
       var qz = Math.max(o.z0, Math.min(o.z1, player.z));
-      var dx = player.x - qx, dz = player.z - qz, d2 = dx * dx + dz * dz;
+      dx = player.x - qx; dz = player.z - qz; d2 = dx * dx + dz * dz;
       if (d2 >= R * R) continue;
       if (d2 > 1e-8) {
-        var d = Math.sqrt(d2), push = (R - d) / d;
+        d = Math.sqrt(d2);
+        var push = (R - d) / d;
         player.x += dx * push; player.z += dz * push;
       } else {
         var l = player.x - o.x0, r = o.x1 - player.x, b = player.z - o.z0, t = o.z1 - player.z;
@@ -447,8 +448,25 @@
         else player.z = o.z1 + R;
       }
     }
-    player.x = Math.max(ARENA.x0 + R, Math.min(ARENA.x1 - R, player.x));
-    player.z = Math.max(ARENA.z0 + R, Math.min(ARENA.z1 - R, player.z));
+    for (i = 0; i < CIRCS.length; i++) {
+      var c = CIRCS[i], rr = R + c.r;
+      dx = player.x - c.x; dz = player.z - c.z; d2 = dx * dx + dz * dz;
+      if (d2 >= rr * rr) continue;
+      if (d2 < 1e-8) { dx = 1; dz = 0; d = 1; } else d = Math.sqrt(d2);
+      player.x = c.x + dx / d * rr;
+      player.z = c.z + dz / d * rr;
+    }
+    dx = player.x - POND.x; dz = player.z - POND.z;
+    d = Math.sqrt(dx * dx + dz * dz);
+    var lim = pondR(Math.atan2(dz, dx)) + R * 0.4;
+    if (d < lim) {
+      if (d < 1e-4) { dx = 1; dz = 0; d = 1; }
+      player.x = POND.x + dx / d * lim;
+      player.z = POND.z + dz / d * lim;
+    }
+    var e = 0.3 + R;
+    player.x = Math.max(WORLD.x0 + e, Math.min(WORLD.x1 - e, player.x));
+    player.z = Math.max(WORLD.z0 + e, Math.min(WORLD.z1 - e, player.z));
   }
 
   function updateMovement(dt) {
@@ -483,90 +501,18 @@
 
   function update(dt) {
     glowT += dt;
-    updateMovement(dt);
-    if (state === "play") {
-      var r = rate();
-      beltOffset = (beltOffset + r * BELT_LEN * dt) % BELT_LEN;
-      if (shape) {
-        shape.p += r * dt;
-        if (shape.p >= 1) {
-          var sp = shapePos(1);
-          fliers.push({ type: shape.type, gold: !!shape.gold, sx: sp.x, sy: sp.y, sz: sp.z, tx: 0, ty: 0.25, tz: BELT_END - 0.7, t: 0, fall: true });
-          shape = null;
-          spawnDelay = 0.4;
-          mistake("Missed!");
-        }
-      } else {
-        spawnDelay -= dt;
-        if (spawnDelay <= 0 && state === "play") spawn();
-      }
-    }
-    for (var i = fliers.length - 1; i >= 0; i--) {
-      fliers[i].t += dt / 0.35;
-      if (fliers[i].t >= 1) fliers.splice(i, 1);
-    }
-    if (flash > 0) flash = Math.max(0, flash - dt);
-    if (msgT > 0) msgT = Math.max(0, msgT - dt);
-    if (streakT > 0) streakT = Math.max(0, streakT - dt);
-    updateAvatar(dt);
+    if (state === "play") updateMovement(dt);
   }
 
   // ---- drawing ----
-  function drawShape(type, x, y, s, alpha, gold) {
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = TYPES[type].color;
-    if (gold) {
-      ctx.strokeStyle = GOLD;
-      ctx.lineWidth = Math.max(1.5, Math.min(5, s * 0.25));
-      ctx.shadowColor = "rgba(255,205,60,0.9)";
-      ctx.shadowBlur = s * (0.7 + 0.3 * Math.sin(glowT * 6));
-    } else {
-      ctx.strokeStyle = "rgba(255,255,255,0.85)";
-      ctx.lineWidth = Math.max(1, Math.min(3, s * 0.12));
-    }
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    var name = TYPES[type].name;
-    if (name === "circle") {
-      ctx.arc(x, y, s, 0, Math.PI * 2);
-    } else if (name === "triangle") {
-      ctx.moveTo(x, y - s * 1.1);
-      ctx.lineTo(x + s * 1.08, y + s * 0.8);
-      ctx.lineTo(x - s * 1.08, y + s * 0.8);
-      ctx.closePath();
-    } else {
-      ctx.rect(x - s * 0.9, y - s * 0.9, s * 1.8, s * 1.8);
-    }
-    ctx.fill();
-    ctx.stroke();
-    if (gold) {
-      ctx.shadowBlur = 0;
-      ctx.shadowColor = "rgba(0,0,0,0)";
-    }
-    ctx.globalAlpha = 1;
-  }
-
-  function seg(ax, ay, az, bx, by, bz) {
-    var a = toCam(ax, ay, az), b = toCam(bx, by, bz), t;
-    if (a[2] < NEAR && b[2] < NEAR) return;
-    if (a[2] < NEAR) {
-      t = (NEAR - a[2]) / (b[2] - a[2]);
-      a = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, NEAR];
-    } else if (b[2] < NEAR) {
-      t = (NEAR - b[2]) / (a[2] - b[2]);
-      b = [b[0] + (a[0] - b[0]) * t, b[1] + (a[1] - b[1]) * t, NEAR];
-    }
-    var sa = cam.f / a[2], sb = cam.f / b[2];
-    ctx.moveTo(cam.cx + a[0] * sa, cam.cy - a[1] * sa);
-    ctx.lineTo(cam.cx + b[0] * sb, cam.cy - b[1] * sb);
-  }
-
-  function groundPoly(pts, style) {
-    var cp = [];
-    for (var i = 0; i < pts.length; i++) cp.push(toCam(pts[i][0], pts[i][1], pts[i][2]));
+  function groundPoly(pts, col, a) {
+    var cp = [], n = pts.length, i;
+    for (i = 0; i < n; i++) cp.push(toCam(pts[i][0], pts[i][1], pts[i][2]));
     var s = projPoly(cp);
     if (!s) return;
-    ctx.fillStyle = style;
+    var h = pts[Math.floor(n / 2)];
+    var mx = (pts[0][0] + h[0]) * 0.5 - cam.x, mz = (pts[0][2] + h[2]) * 0.5 - cam.z, my = cam.y;
+    ctx.fillStyle = fogStr(col, 1, Math.sqrt(mx * mx + mz * mz + my * my), a);
     ctx.beginPath();
     ctx.moveTo(s[0], s[1]);
     for (var j = 2; j < s.length; j += 2) ctx.lineTo(s[j], s[j + 1]);
@@ -574,124 +520,109 @@
     ctx.fill();
   }
 
-  function drawGround() {
-    var x, z;
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = "rgba(255,255,255,0.07)";
-    ctx.beginPath();
-    for (x = ARENA.x0 + 1; x < ARENA.x1; x += 2) seg(x, 0, ARENA.z0, x, 0, ARENA.z1);
-    for (z = ARENA.z0 + 1; z < ARENA.z1; z += 2) seg(ARENA.x0, 0, z, ARENA.x1, 0, z);
-    ctx.stroke();
-
-    ctx.strokeStyle = "rgba(240,192,64,0.55)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    seg(ARENA.x0, 0, ARENA.z0, ARENA.x1, 0, ARENA.z0);
-    seg(ARENA.x1, 0, ARENA.z0, ARENA.x1, 0, ARENA.z1);
-    seg(ARENA.x1, 0, ARENA.z1, ARENA.x0, 0, ARENA.z1);
-    seg(ARENA.x0, 0, ARENA.z1, ARENA.x0, 0, ARENA.z0);
-    ctx.stroke();
-
-    // belt surface with moving stripes
-    var y = BELT_H;
-    groundPoly([[-BELT_HW, y, BELT_END], [BELT_HW, y, BELT_END], [BELT_HW, y, BELT_START], [-BELT_HW, y, BELT_START]], "rgb(48,52,62)");
-    for (var k = 0; k < BELT_LEN; k++) {
-      var sz = BELT_END + (((k - beltOffset) % BELT_LEN) + BELT_LEN) % BELT_LEN;
-      var ez = Math.min(BELT_START, sz + 0.18);
-      if (ez - sz < 0.02) continue;
-      groundPoly([[-BELT_HW, y + 0.005, sz], [BELT_HW, y + 0.005, sz], [BELT_HW, y + 0.005, ez], [-BELT_HW, y + 0.005, ez]], "rgba(255,255,255,0.09)");
+  function drawGroundItem(g, maxD) {
+    if (maxD) {
+      var dx = g.x - player.x, dz = g.z - player.z;
+      if (dx * dx + dz * dz > maxD * maxD) return;
     }
-    groundPoly([[-BELT_HW, y + 0.01, BELT_END], [BELT_HW, y + 0.01, BELT_END], [BELT_HW, y + 0.01, BELT_END + 0.15], [-BELT_HW, y + 0.01, BELT_END + 0.15]], "rgb(230,80,80)");
-
-    // bot shadow
-    var hopY = AV.hop > 0 ? Math.sin((1 - AV.hop) * Math.PI) * 0.35 : 0;
-    var sr = 0.6 * (1 - hopY * 0.8), sh = [];
-    for (var i = 0; i < 12; i++) {
-      var a = i / 12 * Math.PI * 2;
-      sh.push([player.x + Math.cos(a) * sr, 0.01, player.z + Math.sin(a) * sr]);
-    }
-    groundPoly(sh, "rgba(0,0,0," + (0.35 - hopY * 0.4) + ")");
+    groundPoly(g.pts, g.col, g.a);
   }
 
-  function addBelt(list) {
-    var y = BELT_H, z0, z1, s;
-    for (s = 0; s < 6; s++) {
-      z0 = BELT_END + s * 2; z1 = z0 + 2;
-      addFace(list, [-BELT_HW, 0, z0], [-BELT_HW, 0, z1], [-BELT_HW, y, z1], [-BELT_HW, y, z0], -1, 0, 0, BELT_SIDE);
-      addFace(list, [BELT_HW, 0, z0], [BELT_HW, 0, z1], [BELT_HW, y, z1], [BELT_HW, y, z0], 1, 0, 0, BELT_SIDE);
+  function drawGround() {
+    var i;
+    for (i = 0; i < GROUND.length; i++) drawGroundItem(GROUND[i], GROUND[i].r ? 50 : 0);
+
+    // pond shimmer
+    var k = 0.55 + Math.sin(glowT * 1.3) * 0.08;
+    var rip = [];
+    for (i = 0; i < POND_PTS.length; i += 2) {
+      var p = POND_PTS[i];
+      rip.push([POND.x + (p[0] - POND.x) * k, 0.025, POND.z + (p[2] - POND.z) * k]);
     }
-    addFace(list, [-BELT_HW, 0, BELT_END], [BELT_HW, 0, BELT_END], [BELT_HW, y, BELT_END], [-BELT_HW, y, BELT_END], 0, 0, -1, BELT_FRONT);
-    addFace(list, [-BELT_HW, 0, BELT_START], [BELT_HW, 0, BELT_START], [BELT_HW, y, BELT_START], [-BELT_HW, y, BELT_START], 0, 0, 1, BELT_SIDE);
+    groundPoly(rip, [120, 176, 210], 0.35);
+
+    for (i = 0; i < FLOWERS.length; i++) drawGroundItem(FLOWERS[i], 26);
+    for (i = 0; i < SHADOWS.length; i++) drawGroundItem(SHADOWS[i], 40);
+
+    var bob = player.walkAmt * 0.05;
+    var sr = 0.6 * (1 - bob), sh = [];
+    for (i = 0; i < 12; i++) {
+      var a = i / 12 * Math.PI * 2;
+      sh.push([player.x + Math.cos(a) * sr, 0.03, player.z + Math.sin(a) * sr]);
+    }
+    groundPoly(sh, [0, 0, 0], 0.32);
   }
 
   function addBot(list) {
-    var hopY = AV.hop > 0 ? Math.sin((1 - AV.hop) * Math.PI) * 0.35 : 0;
-    var shake = AV.hurt > 0 ? Math.sin(glowT * 55) * 0.07 * AV.hurt : 0;
     var wa = player.walkAmt, ws = Math.sin(player.walk);
     var bob = Math.sin(glowT * 2.4) * 0.025 * (1 - wa) + Math.abs(Math.cos(player.walk)) * 0.07 * wa;
-    var g = {
-      px: player.x, pz: player.z,
-      c: Math.cos(player.yaw), s: Math.sin(player.yaw),
-      ox: shake, oy: hopY + bob, hurt: AV.hurt
-    };
+    var g = { px: player.x, pz: player.z, c: Math.cos(player.yaw), s: Math.sin(player.yaw), oy: bob };
     var legSwing = ws * 0.7 * wa;
-    // legs
     botBox(list, g, -0.15, 0.36, 0, 0.11, 0.36, 0.13, AV_LEG, -0.15, 0.72, 0, legSwing);
     botBox(list, g, 0.15, 0.36, 0, 0.11, 0.36, 0.13, AV_LEG, 0.15, 0.72, 0, -legSwing);
-    // torso, chest panel, back pack with light
     botBox(list, g, 0, 1.05, 0, 0.33, 0.33, 0.2, AV_BODY);
     botBox(list, g, 0, 1.1, 0.215, 0.11, 0.08, 0.02, AV_GOLD);
     botBox(list, g, 0, 1.08, -0.26, 0.2, 0.22, 0.06, AV_DARK);
     botBox(list, g, 0, 1.15, -0.325, 0.07, 0.05, 0.01, (Math.sin(glowT * 4) > 0) ? AV_GOLD : AV_EYE);
-    // arms
-    var armAmt = Math.min(1, AV.pointT * 2.5);
     var idle = 0.08 + Math.sin(glowT * 2.4) * 0.03;
     var armSwing = ws * 0.55 * wa;
-    var rRaise = AV.side >= 0 ? armAmt : 0;
-    var lRaise = AV.side <= 0 ? armAmt : 0;
-    botBox(list, g, 0.45, 1.03, 0, 0.1, 0.32, 0.11, AV_BODY, 0.45, 1.32, idle + rRaise * 0.5, -rRaise * 1.45 + armSwing * (1 - rRaise));
-    botBox(list, g, -0.45, 1.03, 0, 0.1, 0.32, 0.11, AV_BODY, -0.45, 1.32, -idle - lRaise * 0.5, -lRaise * 1.45 - armSwing * (1 - lRaise));
-    // head, visor, eyes
+    botBox(list, g, 0.45, 1.03, 0, 0.1, 0.32, 0.11, AV_BODY, 0.45, 1.32, idle, armSwing);
+    botBox(list, g, -0.45, 1.03, 0, 0.1, 0.32, 0.11, AV_BODY, -0.45, 1.32, -idle, -armSwing);
     botBox(list, g, 0, 1.62, 0, 0.27, 0.27, 0.27, AV_HEAD);
     botBox(list, g, 0, 1.64, 0.28, 0.22, 0.09, 0.02, AV_DARK);
     botBox(list, g, -0.1, 1.64, 0.305, 0.05, 0.04, 0.012, AV_EYE);
     botBox(list, g, 0.1, 1.64, 0.305, 0.05, 0.04, 0.012, AV_EYE);
-    // antenna
     botBox(list, g, 0, 1.98, 0, 0.025, 0.09, 0.025, AV_DARK);
     botBox(list, g, 0, 2.11, 0, 0.06, 0.06, 0.06, AV_GOLD);
   }
 
+  function addTree(list, t) {
+    var s = t.s, x = t.x, z = t.z;
+    var dx = x - cam.x, dz = z - cam.z;
+    if (dx * dx + dz * dz > DRAW_DIST * DRAW_DIST) return;
+    addBoxW(list, x, 0.6 * s, z, 0.17 * s, 0.6 * s, 0.17 * s, TRUNK);
+    if (t.kind === 0) {
+      addBoxW(list, x, 1.2 * s + 0.7 * s, z, 0.85 * s, 0.7 * s, 0.85 * s, LEAF_A, LEAF_A2);
+      addBoxW(list, x, 2.6 * s + 0.3 * s, z, 0.5 * s, 0.3 * s, 0.5 * s, LEAF_A2);
+    } else {
+      addBoxW(list, x, 1.0 * s + 0.45 * s, z, 0.9 * s, 0.45 * s, 0.9 * s, LEAF_B);
+      addBoxW(list, x, 1.9 * s + 0.4 * s, z, 0.62 * s, 0.4 * s, 0.62 * s, LEAF_B);
+      addBoxW(list, x, 2.7 * s + 0.35 * s, z, 0.34 * s, 0.35 * s, 0.34 * s, LEAF_B);
+    }
+  }
+
+  function addHut(list) {
+    var h = HUT, fz = h.z - h.hz;
+    addBoxW(list, h.x, h.h / 2, h.z, h.hx, h.h / 2, h.hz, HUT_WALL, HUT_WALL);
+    addBoxW(list, h.x, h.h + 0.22, h.z, h.hx + 0.35, 0.22, h.hz + 0.35, HUT_ROOF);
+    addBoxW(list, h.x, h.h + 0.66, h.z, h.hx - 0.1, 0.22, h.hz - 0.45, HUT_ROOF);
+    addBoxW(list, h.x, h.h + 1.06, h.z, h.hx - 0.55, 0.18, h.hz - 1.05, HUT_ROOF);
+    addBoxW(list, h.x + 1.3, h.h + 1.1, h.z + 0.8, 0.24, 0.6, 0.24, STONE, STONE_TOP);
+    addBoxW(list, h.x, 0.62, fz - 0.04, 0.45, 0.62, 0.04, HUT_DOOR, null, 0.85);
+    addBoxW(list, h.x - 1.45, 1.0, fz - 0.03, 0.35, 0.28, 0.03, HUT_WIN, null, 0.85);
+    addBoxW(list, h.x + 1.45, 1.0, fz - 0.03, 0.35, 0.28, 0.03, HUT_WIN, null, 0.85);
+  }
+
   function buildScene(list) {
-    var i, c, d;
-    addBelt(list);
-    for (d = -1; d <= 1; d++) {
-      var t = TYPES[d + 1], col = t.rgb;
-      var bx = d * BIN_GAP;
-      addBoxW(list, bx, BIN_HH, BIN_Z, BIN_HW, BIN_HH, BIN_HD, [col[0] * 0.8, col[1] * 0.8, col[2] * 0.8], BIN_TOP);
-      addShapeBB(list, d + 1, bx, 1.9 + Math.sin(glowT * 2 + d) * 0.08, BIN_Z, 0.36, 0.95, false);
-      addTextBB(list, t.label, bx, 1.3, BIN_Z, 0.26, "rgb(233,230,223)");
+    var i, c;
+    for (i = 0; i < TREES.length; i++) addTree(list, TREES[i]);
+    for (i = 0; i < ROCKS.length; i++) {
+      c = ROCKS[i];
+      addBoxW(list, c.x, c.h, c.z, c.s, c.h, c.s, c.col);
     }
-    for (i = 0; i < CRATES.length; i++) {
-      c = CRATES[i];
-      addBoxW(list, c[0], c[2], c[1], c[2], c[2], c[2], CRATE_COL, CRATE_TOP);
+    for (i = 0; i < RIDGE.length; i++) {
+      c = RIDGE[i];
+      addBoxW(list, c[0], c[3], c[1], c[2], c[3], c[2], c[4]);
     }
-    for (i = 0; i < PILLARS.length; i++) {
-      c = PILLARS[i];
-      addBoxW(list, c[0], 2, c[1], 0.5, 2, 0.5, PILLAR_COL, PILLAR_TOP);
-      addBoxW(list, c[0], 4.15, c[1], 0.62, 0.15, 0.62, AV_GOLD);
+    for (i = 0; i < WALLS.length; i++) {
+      c = WALLS[i];
+      addBoxW(list, c[0], c[3], c[1], c[2], c[3], c[4], STONE, STONE_TOP);
     }
+    addHut(list);
+    addBoxW(list, SIGN.x, 0.7, SIGN.z, 0.08, 0.7, 0.08, WOOD);
+    addBoxW(list, SIGN.x, 1.35, SIGN.z, 0.75, 0.25, 0.05, WOOD);
+    addTextBB(list, "MOSSVALE", SIGN.x, 1.35, SIGN.z, 0.2, "rgb(250,240,214)");
     addBot(list);
-    if (shape) {
-      var sp = shapePos(shape.p);
-      addShapeBB(list, shape.type, sp.x, sp.y, sp.z, SHAPE_R, 1, shape.gold);
-    }
-    for (i = 0; i < fliers.length; i++) {
-      var f = fliers[i], p = f.t;
-      var x = f.sx + (f.tx - f.sx) * p;
-      var y = f.fall ? f.sy + (f.ty - f.sy) * p * p : f.sy + (f.ty - f.sy) * p + Math.sin(p * Math.PI) * 1.6;
-      var z = f.sz + (f.tz - f.sz) * p;
-      addShapeBB(list, f.type, x, y, z, SHAPE_R * (1 - p * 0.45), 1 - p * 0.5, f.gold);
-    }
   }
 
   function byDepth(a, b) { return b.d - a.d; }
@@ -703,7 +634,7 @@
       if (it.k === 0) {
         var p = it.pts;
         ctx.fillStyle = it.col;
-        ctx.strokeStyle = "rgba(10,12,16,0.35)";
+        ctx.strokeStyle = "rgba(10,16,12,0.22)";
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(p[0], p[1]);
@@ -711,71 +642,53 @@
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
-      } else if (it.k === 1) {
-        drawShape(it.type, it.sx, it.sy, it.r, it.a, it.gold);
       } else {
-        ctx.fillStyle = it.color;
         ctx.font = "bold " + Math.round(it.fs) + "px system-ui, sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
+        ctx.fillStyle = "rgba(40,26,14,0.8)";
+        ctx.fillText(it.text, it.sx + 1, it.sy + 1);
+        ctx.fillStyle = it.color;
         ctx.fillText(it.text, it.sx, it.sy);
       }
     }
   }
 
-  function drawIncoming() {
-    if (state !== "play") return;
-    var pw = 86, ph = 74, px = 8, py = 8;
-    ctx.fillStyle = "rgba(12,13,16,0.6)";
-    ctx.fillRect(px, py, pw, ph);
-    ctx.fillStyle = "rgb(201,196,184)";
+  function drawCompass() {
+    var r = 20, cx = W - r - 12, cy = r + 12;
+    ctx.fillStyle = "rgba(12,16,14,0.5)";
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + 4, 0, Math.PI * 2);
+    ctx.fill();
+    var nx = -Math.sin(camYaw), ny = -Math.cos(camYaw);
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "rgb(230,90,80)";
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + nx * (r - 7), cy + ny * (r - 7));
+    ctx.stroke();
+    ctx.strokeStyle = "rgb(220,220,220)";
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx - nx * (r - 9), cy - ny * (r - 9));
+    ctx.stroke();
+    ctx.lineCap = "butt";
+    ctx.fillStyle = "rgb(255,240,220)";
     ctx.font = "bold 10px system-ui, sans-serif";
-    ctx.textAlign = "left";
+    ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("INCOMING", px + 8, py + 11);
-    if (shape) {
-      drawShape(shape.type, px + pw / 2, py + 37, 13, 1, shape.gold);
-      var bw = pw - 16;
-      ctx.fillStyle = "rgba(255,255,255,0.15)";
-      ctx.fillRect(px + 8, py + ph - 11, bw, 5);
-      ctx.fillStyle = shape.p > 0.75 ? "rgb(230,80,80)" : "rgb(120,230,150)";
-      ctx.fillRect(px + 8, py + ph - 11, bw * Math.min(1, shape.p), 5);
-    } else {
-      ctx.textAlign = "center";
-      ctx.fillText("...", px + pw / 2, py + 37);
-    }
-  }
-
-  function drawStreakBadge() {
-    if (state !== "play") return;
-    var pw = 86, ph = 34, px = W - pw - 8, py = 8;
-    ctx.fillStyle = "rgba(12,13,16,0.6)";
-    ctx.fillRect(px, py, pw, ph);
-    ctx.fillStyle = "rgb(201,196,184)";
-    ctx.font = "bold 10px system-ui, sans-serif";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillText("STREAK", px + 8, py + 11);
-    ctx.fillStyle = streak > 0 ? "rgb(120,220,255)" : "rgb(160,160,160)";
-    ctx.font = "bold 15px system-ui, sans-serif";
-    ctx.textAlign = "right";
-    ctx.fillText(String(streak), px + pw - 8, py + 12);
-    var bw = pw - 16;
-    var prog = (streak % STREAK_EVERY) / STREAK_EVERY;
-    ctx.fillStyle = "rgba(255,255,255,0.15)";
-    ctx.fillRect(px + 8, py + ph - 10, bw, 4);
-    ctx.fillStyle = "rgb(120,220,255)";
-    ctx.fillRect(px + 8, py + ph - 10, bw * prog, 4);
+    ctx.fillText("N", cx + nx * (r - 1), cy + ny * (r - 1));
   }
 
   function drawStick() {
     if (!stick) return;
-    ctx.strokeStyle = "rgba(255,255,255,0.3)";
+    ctx.strokeStyle = "rgba(255,255,255,0.35)";
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(stick.ox, stick.oy, STICK_R, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.fillStyle = "rgba(255,255,255,0.25)";
+    ctx.fillStyle = "rgba(255,255,255,0.3)";
     ctx.beginPath();
     ctx.arc(stick.ox + stick.dx * STICK_R, stick.oy + stick.dy * STICK_R, 20, 0, Math.PI * 2);
     ctx.fill();
@@ -786,12 +699,16 @@
     var hy = cam.cy - Math.tan(CAM_PITCH) * cam.f;
     var hc = Math.max(1, Math.min(H, hy));
     var sky = ctx.createLinearGradient(0, hc - H * 0.6, 0, hc);
-    sky.addColorStop(0, "rgb(20,22,28)");
-    sky.addColorStop(1, "rgb(48,54,70)");
+    sky.addColorStop(0, "rgb(104,156,214)");
+    sky.addColorStop(1, "rgb(" + HAZE[0] + "," + HAZE[1] + "," + HAZE[2] + ")");
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, W, H);
     var gy = Math.max(0, Math.min(H, hy));
-    ctx.fillStyle = "rgb(33,36,44)";
+    var gr = ctx.createLinearGradient(0, gy, 0, H);
+    gr.addColorStop(0, "rgb(170,196,190)");
+    gr.addColorStop(0.12, "rgb(116,158,100)");
+    gr.addColorStop(1, "rgb(" + GRASS[0] + "," + GRASS[1] + "," + GRASS[2] + ")");
+    ctx.fillStyle = gr;
     ctx.fillRect(0, gy, W, H - gy);
 
     drawGround();
@@ -801,51 +718,8 @@
     list.sort(byDepth);
     drawList(list);
 
-    if (flash > 0) {
-      if (flashGold) ctx.fillStyle = "rgba(255,200,60," + (flash * 0.5) + ")";
-      else ctx.fillStyle = flashGood ? "rgba(80,200,120," + (flash * 0.5) + ")" : "rgba(230,70,70," + (flash * 0.8) + ")";
-      ctx.fillRect(0, 0, W, H);
-    }
-
     drawStick();
-    drawIncoming();
-    drawStreakBadge();
-
-    var fs;
-    if (msgT > 0) {
-      ctx.globalAlpha = Math.min(1, msgT * 2);
-      ctx.fillStyle = msgColor;
-      fs = Math.min(W, H) * (msgGold ? 0.11 : 0.08);
-      ctx.font = "bold " + Math.round(fs) + "px system-ui, sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      if (msgGold) {
-        ctx.shadowColor = "rgba(255,205,60,0.9)";
-        ctx.shadowBlur = fs * 0.5;
-      }
-      ctx.fillText(msg, W / 2, H * 0.12);
-      if (msgGold) {
-        ctx.shadowBlur = 0;
-        ctx.shadowColor = "rgba(0,0,0,0)";
-      }
-      ctx.globalAlpha = 1;
-    }
-
-    if (streakT > 0) {
-      var pop = 1 + Math.max(0, streakT - 0.9) * 1.5;
-      ctx.globalAlpha = Math.min(1, streakT * 2);
-      fs = Math.min(W, H) * 0.075 * pop;
-      ctx.font = "bold " + Math.round(fs) + "px system-ui, sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = "rgb(120,220,255)";
-      ctx.shadowColor = "rgba(80,200,255,0.9)";
-      ctx.shadowBlur = fs * 0.4;
-      ctx.fillText("Streak! +" + STREAK_BONUS, W / 2, H * 0.21);
-      ctx.shadowBlur = 0;
-      ctx.shadowColor = "rgba(0,0,0,0)";
-      ctx.globalAlpha = 1;
-    }
+    drawCompass();
   }
 
   var last = performance.now();
@@ -865,28 +739,20 @@
     var key = String(e.key || "").toLowerCase();
     if (MOVE_KEYS[key]) {
       e.preventDefault();
+      if (state !== "play") startGame();
       if (!keys[key]) {
         keys[key] = true;
         window.gameTest.inputsHandled++;
       }
       return;
     }
-    if (key === "j" || key === "1") {
-      e.preventDefault();
-      if (!e.repeat) sort(-1);
-    } else if (key === "k" || key === "2") {
-      e.preventDefault();
-      if (!e.repeat) sort(0);
-    } else if (key === "l" || key === "3") {
-      e.preventDefault();
-      if (!e.repeat) sort(1);
-    } else if (key === "m") {
+    if (key === "m") {
       e.preventDefault();
       toggleMusic();
     } else if ((key === "enter" || key === " ") && state !== "play") {
       e.preventDefault();
       window.gameTest.inputsHandled++;
-      startRound();
+      startGame();
     }
   });
 
@@ -901,16 +767,11 @@
   });
 
   startBtn.addEventListener("click", function () {
-    if (state === "play") return;
     window.gameTest.inputsHandled++;
-    startRound();
+    startGame();
   });
 
   musicBtn.addEventListener("click", function () { toggleMusic(); musicBtn.blur(); });
-
-  binLeft.addEventListener("click", function () { sort(-1); binLeft.blur(); });
-  binMid.addEventListener("click", function () { sort(0); binMid.blur(); });
-  binRight.addEventListener("click", function () { sort(1); binRight.blur(); });
 
   function setStick(x, y) {
     var dx = (x - stick.ox) / STICK_R, dy = (y - stick.oy) / STICK_R;
@@ -924,7 +785,8 @@
     var r = canvas.getBoundingClientRect();
     var lx = e.clientX - r.left, ly = e.clientY - r.top;
     window.gameTest.inputsHandled++;
-    if (e.pointerType === "mouse" && state === "play" && !locked) requestLock();
+    if (state !== "play") startGame();
+    if (e.pointerType === "mouse" && !locked) requestLock();
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
     if (e.pointerType !== "mouse" && lx < r.width / 2 && stickId === null) {
       stickId = e.pointerId;
@@ -957,7 +819,6 @@
 
   window.addEventListener("resize", resize);
   resize();
-  updateHud();
   updateMusicBtn();
   requestAnimationFrame(frame);
 })();
