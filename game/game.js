@@ -25,14 +25,86 @@
 
   goalEl.textContent = GOAL;
 
+  // ---- account save (optional; localStorage keeps working on its own) ----
+  var MUSIC_KEY = "signalSorterMusicMuted";
+  var hadLocalMusicPref = false;
+  try { hadLocalMusicPref = localStorage.getItem(MUSIC_KEY) !== null; } catch (e) { hadLocalMusicPref = false; }
+  var musicTouched = false;
+  var lastStored = null;
+
+  function accountApi() {
+    var g = window.gameSave;
+    if (g && typeof g.load === "function" && typeof g.store === "function") return g;
+    return null;
+  }
+
+  function saveText() {
+    return JSON.stringify({ v: 1, musicMuted: !!music.isMuted() });
+  }
+
+  function storeAccount() {
+    var api = accountApi();
+    if (!api) return;
+    var t = saveText();
+    if (t === lastStored) return;
+    lastStored = t;
+    try {
+      var p = api.store(t);
+      if (p && typeof p.then === "function") {
+        p.then(function (ok) {
+          if (!ok && lastStored === t) lastStored = null;
+        }, function () {
+          if (lastStored === t) lastStored = null;
+        });
+      }
+    } catch (e) {
+      lastStored = null;
+    }
+  }
+
+  function applyAccount(text) {
+    if (typeof text !== "string" || !text || text.length > 32000) return false;
+    var d;
+    try { d = JSON.parse(text); } catch (e) { return false; }
+    if (!d || typeof d !== "object") return false;
+    // the browser's own setting wins; the account fills it in on a new browser
+    if (typeof d.musicMuted === "boolean" && !hadLocalMusicPref && !musicTouched) {
+      music.setMuted(d.musicMuted);
+      updateMusicBtn();
+    }
+    return true;
+  }
+
+  function loadAccount() {
+    var api = accountApi();
+    if (!api) return;
+    try {
+      var p = api.load();
+      if (p && typeof p.then === "function") {
+        p.then(function (text) {
+          if (text === null || text === undefined) {
+            if (hadLocalMusicPref || musicTouched) storeAccount();
+            return;
+          }
+          if (applyAccount(text)) {
+            if (saveText() !== text) storeAccount();
+            else lastStored = text;
+          }
+        }, function () { /* unavailable: keep local only */ });
+      }
+    } catch (e) { /* unavailable: keep local only */ }
+  }
+
   function updateMusicBtn() {
     musicBtn.textContent = music.isMuted() ? "Music: Off" : "Music: On";
   }
 
   function toggleMusic() {
     window.gameTest.inputsHandled++;
+    musicTouched = true;
     music.setMuted(!music.isMuted());
     updateMusicBtn();
+    storeAccount();
   }
 
   var SCALE = 2;
@@ -1229,6 +1301,12 @@
   canvas.addEventListener("pointerup", endPointer);
   canvas.addEventListener("pointercancel", endPointer);
 
+  // session end: keep the account copy up to date (only stores if something changed)
+  window.addEventListener("pagehide", storeAccount);
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) storeAccount();
+  });
+
   window.addEventListener("resize", resize);
   resize();
   updateMusicBtn();
@@ -1237,4 +1315,5 @@
   updateTreeCount();
   renderInventory();
   requestAnimationFrame(frame);
+  loadAccount();
 })();
