@@ -5,7 +5,9 @@ header { display: flex; flex-wrap: wrap; align-items: center; justify-content: c
 h1 { font-size: 1rem; margin: 0; letter-spacing: 0.04em; white-space: nowrap; }
 #goal { order: 3; flex: 1 1 100%; margin: 0; color: #c9d4c0; font-size: 0.75rem; line-height: 1.25; }
 #hud { display: flex; flex-wrap: wrap; gap: 2px 10px; justify-content: center; align-items: center; font-size: 0.8rem; line-height: 1.2; color: #a9a59b; }
-#musicBtn { font: inherit; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 6px; border: 1px solid #4a5c4f; background: #26322a; color: #e9e6df; cursor: pointer; touch-action: manipulation; }
+#treeCount { white-space: nowrap; }
+#musicBtn, #gunBtn { font: inherit; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 6px; border: 1px solid #4a5c4f; background: #26322a; color: #e9e6df; cursor: pointer; touch-action: manipulation; }
+#gunBtn.on { background: #6a2e26; border-color: #b0574a; color: #ffe9e0; }
 #stage { position: relative; flex: 1 1 auto; min-height: 180px; border-radius: 8px; overflow: hidden; background: #58884a; }
 #board { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
 #board:active { cursor: grabbing; }

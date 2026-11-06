@@ -1,10 +1,11 @@
 (function () {
   "use strict";
 
-  var GOAL = "Explore the valley of Mossvale: roam freely and find the old cottage, the pond, and the rocky ridge.";
+  var GOAL = "Explore Mossvale: find the old cottage, the pond, and the rocky ridge. Equip your pistol (G or the Pistol button) to blast trees out of your way.";
   window.gameTest = { inputsHandled: 0, goal: GOAL };
 
-  var music = window.TechnoMusic || { start: function () {}, stop: function () {}, tick: function () {}, setMuted: function () {}, isMuted: function () { return true; } };
+  var music = window.TechnoMusic || { start: function () {}, stop: function () {}, tick: function () {}, setMuted: function () {}, isMuted: function () { return true; }, sfx: function () {} };
+  if (typeof music.sfx !== "function") music.sfx = function () {};
 
   var canvas = document.getElementById("board");
   var ctx = canvas.getContext("2d");
@@ -13,6 +14,8 @@
   var overlay = document.getElementById("overlay");
   var startBtn = document.getElementById("startBtn");
   var musicBtn = document.getElementById("musicBtn");
+  var gunBtn = document.getElementById("gunBtn");
+  var treeCountEl = document.getElementById("treeCount");
   var lockHint = document.getElementById("lockHint");
 
   goalEl.textContent = GOAL;
@@ -40,6 +43,7 @@
   var NEAR = 0.2;
   var STICK_R = 50;
   var DRAW_DIST = 52;
+  var SHOT_RANGE = 30, GUN_Y = 1.36, SHOT_COOLDOWN = 0.3;
 
   // ---- colors ----
   var HAZE = [184, 206, 216];
@@ -52,6 +56,7 @@
   var WOOD = [134, 98, 62];
   var AV_BODY = [150, 122, 215], AV_HEAD = [226, 222, 210], AV_DARK = [34, 38, 50];
   var AV_EYE = [120, 230, 255], AV_LEG = [84, 90, 108], AV_GOLD = [255, 212, 70];
+  var GUN_DARK = [58, 62, 70], GUN_GRIP = [96, 74, 54];
 
   // ---- deterministic random so the world is always the same ----
   var seed = 20240611;
@@ -79,6 +84,7 @@
   var SIGN = { x: 2, z: -1 };
 
   var RECTS = [], CIRCS = [], TREES = [], ROCKS = [], RIDGE = [], WALLS = [];
+  var BLOCKERS = [];
   var GROUND = [], FLOWERS = [], SHADOWS = [];
   var POND_PTS = [];
 
@@ -124,8 +130,10 @@
   }
 
   (function buildWorld() {
-    var i, x, z, s, h;
-    RECTS.push({ x0: HUT.x - HUT.hx, x1: HUT.x + HUT.hx, z0: HUT.z - HUT.hz, z1: HUT.z + HUT.hz });
+    var i, x, z, s, h, rc;
+    rc = { x0: HUT.x - HUT.hx, x1: HUT.x + HUT.hx, z0: HUT.z - HUT.hz, z1: HUT.z + HUT.hz };
+    RECTS.push(rc);
+    BLOCKERS.push(rc);
     CIRCS.push({ x: SIGN.x, z: SIGN.z, r: 0.2 });
 
     // rocky ridge with a narrow pass through the middle
@@ -134,7 +142,9 @@
       s = 0.9 + rnd() * 0.5; h = 1.2 + rnd() * 1.6;
       x = 12 + i * 1.6; z = 15 + i * 0.95 + (rnd() - 0.5) * 0.5;
       RIDGE.push([x, z, s, h, ROCK_COLS[i % 3]]);
-      RECTS.push({ x0: x - s, x1: x + s, z0: z - s, z1: z + s });
+      rc = { x0: x - s, x1: x + s, z0: z - s, z1: z + s };
+      RECTS.push(rc);
+      BLOCKERS.push(rc);
     }
 
     // scattered rocks
@@ -145,7 +155,9 @@
       if (!isClear(x, z, s + 0.4)) continue;
       h = s * (0.6 + rnd() * 0.5);
       ROCKS.push({ x: x, z: z, s: s, h: h, col: ROCK_COLS[Math.floor(rnd() * 3) % 3] });
-      RECTS.push({ x0: x - s, x1: x + s, z0: z - s, z1: z + s });
+      rc = { x0: x - s, x1: x + s, z0: z - s, z1: z + s };
+      RECTS.push(rc);
+      if (h * 2 > GUN_Y) BLOCKERS.push(rc);
     }
 
     // trees: some scattered, some in small groves
@@ -161,10 +173,12 @@
       }
       if (!isClear(x, z, 1.0)) continue;
       s = 0.8 + rnd() * 0.5;
-      var t = { x: x, z: z, s: s, kind: rnd() < 0.45 ? 1 : 0 };
-      TREES.push(t);
-      CIRCS.push({ x: x, z: z, r: 0.25 + 0.15 * s });
-      SHADOWS.push({ pts: blobPts(x + 0.25, z - 0.2, 1.1 * s, 8, 0.015, 0), col: [20, 40, 20], a: 0.22, x: x, z: z });
+      var kind = rnd() < 0.45 ? 1 : 0;
+      var circ = { x: x, z: z, r: 0.25 + 0.15 * s };
+      var shad = { pts: blobPts(x + 0.25, z - 0.2, 1.1 * s, 8, 0.015, 0), col: [20, 40, 20], a: 0.22, x: x, z: z };
+      TREES.push({ x: x, z: z, s: s, kind: kind, circ: circ, shadow: shad });
+      CIRCS.push(circ);
+      SHADOWS.push(shad);
     }
 
     // boundary stone walls
@@ -225,6 +239,11 @@
   var locked = false;
   var state = "ready";
   var glowT = 0;
+
+  // ---- pistol state ----
+  var gunOn = false, gunCool = 0, gunKick = 0, shake = 0, cleared = 0;
+  var PARTS = [], FX = [], TRACERS = [];
+  var aim = { tree: null, d: SHOT_RANGE, x: 0, z: 0 };
 
   var FACES = [[0, 2, 6, 4], [1, 3, 7, 5], [0, 1, 5, 4], [2, 3, 7, 6], [0, 1, 3, 2], [4, 5, 7, 6]];
   var LIGHT = (function () {
@@ -419,6 +438,130 @@
     music.start();
   }
 
+  // ---- pistol ----
+  function updateGunBtn() {
+    gunBtn.textContent = gunOn ? "Pistol: Equipped" : "Pistol: Holstered";
+    if (gunOn) gunBtn.classList.add("on");
+    else gunBtn.classList.remove("on");
+  }
+
+  function updateTreeCount() {
+    treeCountEl.textContent = "Trees cleared: " + cleared;
+  }
+
+  function setGun(on) {
+    window.gameTest.inputsHandled++;
+    if (state !== "play") startGame();
+    gunOn = !!on;
+    gunKick = 0;
+    updateGunBtn();
+  }
+
+  function armRx() { return -1.45 - gunKick * 0.35; }
+
+  // point in the right arm's hanging frame (relative to shoulder pivot) -> world
+  function gunLocal(dy, lz) {
+    var rx = armRx(), c = Math.cos(rx), s = Math.sin(rx);
+    var y = 1.32 + dy * c - lz * s;
+    var z = dy * s + lz * c;
+    var x = 0.45;
+    var cy = Math.cos(player.yaw), sy = Math.sin(player.yaw);
+    return [player.x + x * cy + z * sy, y, player.z - x * sy + z * cy];
+  }
+
+  function rayRect(ox, oz, dx, dz, o) {
+    var tmin = 0, tmax = 1e9, t1, t2, sw;
+    if (Math.abs(dx) < 1e-9) {
+      if (ox < o.x0 || ox > o.x1) return -1;
+    } else {
+      t1 = (o.x0 - ox) / dx; t2 = (o.x1 - ox) / dx;
+      if (t1 > t2) { sw = t1; t1 = t2; t2 = sw; }
+      if (t1 > tmin) tmin = t1;
+      if (t2 < tmax) tmax = t2;
+    }
+    if (Math.abs(dz) < 1e-9) {
+      if (oz < o.z0 || oz > o.z1) return -1;
+    } else {
+      t1 = (o.z0 - oz) / dz; t2 = (o.z1 - oz) / dz;
+      if (t1 > t2) { sw = t1; t1 = t2; t2 = sw; }
+      if (t1 > tmin) tmin = t1;
+      if (t2 < tmax) tmax = t2;
+    }
+    if (tmax < tmin) return -1;
+    return tmin;
+  }
+
+  function castAim() {
+    var dx = Math.sin(camYaw), dz = Math.cos(camYaw), ox = player.x, oz = player.z;
+    var best = SHOT_RANGE, hit = null, i;
+    for (i = 0; i < TREES.length; i++) {
+      var t = TREES[i];
+      var vx = t.x - ox, vz = t.z - oz;
+      var proj = vx * dx + vz * dz;
+      if (proj <= 0 || proj > best + 2) continue;
+      var rr = 0.8 * t.s;
+      var perp2 = vx * vx + vz * vz - proj * proj;
+      if (perp2 > rr * rr) continue;
+      var d = proj - Math.sqrt(rr * rr - perp2);
+      if (d < 0) d = 0;
+      if (d < best) { best = d; hit = t; }
+    }
+    for (i = 0; i < BLOCKERS.length; i++) {
+      var bd = rayRect(ox, oz, dx, dz, BLOCKERS[i]);
+      if (bd >= 0 && bd < best) { best = bd; hit = null; }
+    }
+    aim.tree = hit;
+    aim.d = best;
+    aim.x = ox + dx * best;
+    aim.z = oz + dz * best;
+  }
+
+  function blowUp(t) {
+    var idx = TREES.indexOf(t), i;
+    if (idx < 0) return;
+    TREES.splice(idx, 1);
+    var ci = CIRCS.indexOf(t.circ);
+    if (ci >= 0) CIRCS.splice(ci, 1);
+    // leave a scorch mark where the tree stood
+    t.shadow.col = [44, 34, 24];
+    t.shadow.a = 0.45;
+    t.shadow.pts = blobPts(t.x, t.z, 0.85 * t.s, 9, 0.016, 0.45);
+
+    var s = t.s, cy = 1.6 * s, leaf = t.kind ? LEAF_B : LEAF_A;
+    for (i = 0; i < 22; i++) {
+      var a = Math.random() * Math.PI * 2, sp = 2 + Math.random() * 5, trunk = i < 5;
+      PARTS.push({
+        x: t.x + Math.cos(a) * 0.3, z: t.z + Math.sin(a) * 0.3,
+        y: trunk ? 0.6 * s : cy + (Math.random() - 0.5) * s,
+        vx: Math.cos(a) * sp, vz: Math.sin(a) * sp, vy: 3 + Math.random() * 6,
+        sz: (0.1 + Math.random() * 0.18) * s,
+        col: trunk ? TRUNK : (i % 3 ? leaf : LEAF_A2),
+        life: 1 + Math.random() * 0.6, age: 0
+      });
+    }
+    if (PARTS.length > 220) PARTS.splice(0, PARTS.length - 220);
+    FX.push({ x: t.x, y: cy, z: t.z, t: 0, dur: 0.55, r0: 0.6 * s, r1: 2.3 * s, kind: 1 });
+    FX.push({ x: t.x, y: cy, z: t.z, t: -0.15, dur: 1.3, r0: 0.8 * s, r1: 2.6 * s, kind: 2 });
+    shake = 0.35;
+    cleared++;
+    updateTreeCount();
+    music.sfx("boom");
+  }
+
+  function fire() {
+    if (!gunOn || state !== "play" || gunCool > 0) return;
+    window.gameTest.inputsHandled++;
+    gunCool = SHOT_COOLDOWN;
+    castAim();
+    var m = gunLocal(-1.0, 0.04);
+    var hy = aim.tree ? 1.3 * aim.tree.s : GUN_Y;
+    TRACERS.push({ a: m, b: [aim.x, hy, aim.z], t: 0.09 });
+    FX.push({ x: m[0], y: m[1], z: m[2], t: 0, dur: 0.07, r0: 0.12, r1: 0.26, kind: 0 });
+    gunKick = 1;
+    music.sfx("shot");
+    if (aim.tree) blowUp(aim.tree);
+  }
+
   // ---- movement ----
   function approachAngle(a, target, k) {
     var d = target - a;
@@ -493,15 +636,45 @@
       player.x += vx * MOVE_SPEED * dt;
       player.z += vz * MOVE_SPEED * dt;
       collide();
-      player.yaw = approachAngle(player.yaw, Math.atan2(vx, vz), dt * 12);
+      if (!gunOn) player.yaw = approachAngle(player.yaw, Math.atan2(vx, vz), dt * 12);
       player.walk += dt * 9 * m;
     }
+    if (gunOn) player.yaw = approachAngle(player.yaw, camYaw, dt * 14);
     player.walkAmt += ((moving ? m : 0) - player.walkAmt) * Math.min(1, dt * 10);
+  }
+
+  function updateEffects(dt) {
+    var i;
+    if (gunCool > 0) gunCool -= dt;
+    gunKick = Math.max(0, gunKick - dt * 7);
+    shake = Math.max(0, shake - dt * 1.2);
+    for (i = PARTS.length - 1; i >= 0; i--) {
+      var p = PARTS[i];
+      p.age += dt;
+      if (p.age > p.life) { PARTS.splice(i, 1); continue; }
+      p.vy -= 16 * dt;
+      p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+      if (p.y < p.sz) {
+        p.y = p.sz;
+        p.vy *= -0.35;
+        p.vx *= 0.6; p.vz *= 0.6;
+      }
+    }
+    for (i = FX.length - 1; i >= 0; i--) {
+      FX[i].t += dt;
+      if (FX[i].t > FX[i].dur) FX.splice(i, 1);
+    }
+    for (i = TRACERS.length - 1; i >= 0; i--) {
+      TRACERS[i].t -= dt;
+      if (TRACERS[i].t <= 0) TRACERS.splice(i, 1);
+    }
   }
 
   function update(dt) {
     glowT += dt;
     if (state === "play") updateMovement(dt);
+    updateEffects(dt);
+    if (gunOn) castAim();
   }
 
   // ---- drawing ----
@@ -566,7 +739,15 @@
     botBox(list, g, 0, 1.15, -0.325, 0.07, 0.05, 0.01, (Math.sin(glowT * 4) > 0) ? AV_GOLD : AV_EYE);
     var idle = 0.08 + Math.sin(glowT * 2.4) * 0.03;
     var armSwing = ws * 0.55 * wa;
-    botBox(list, g, 0.45, 1.03, 0, 0.1, 0.32, 0.11, AV_BODY, 0.45, 1.32, idle, armSwing);
+    if (gunOn) {
+      var rx = armRx();
+      botBox(list, g, 0.45, 1.03, 0, 0.1, 0.32, 0.11, AV_BODY, 0.45, 1.32, 0, rx);
+      // generic handgun held in the right hand (barrel + grip)
+      botBox(list, g, 0.45, 0.52, 0.04, 0.06, 0.18, 0.07, GUN_DARK, 0.45, 1.32, 0, rx);
+      botBox(list, g, 0.45, 0.68, -0.08, 0.05, 0.05, 0.1, GUN_GRIP, 0.45, 1.32, 0, rx);
+    } else {
+      botBox(list, g, 0.45, 1.03, 0, 0.1, 0.32, 0.11, AV_BODY, 0.45, 1.32, idle, armSwing);
+    }
     botBox(list, g, -0.45, 1.03, 0, 0.1, 0.32, 0.11, AV_BODY, -0.45, 1.32, -idle, -armSwing);
     botBox(list, g, 0, 1.62, 0, 0.27, 0.27, 0.27, AV_HEAD);
     botBox(list, g, 0, 1.64, 0.28, 0.22, 0.09, 0.02, AV_DARK);
@@ -603,6 +784,43 @@
     addBoxW(list, h.x + 1.45, 1.0, fz - 0.03, 0.35, 0.28, 0.03, HUT_WIN, null, 0.85);
   }
 
+  function addParticles(list) {
+    for (var i = 0; i < PARTS.length; i++) {
+      var p = PARTS[i];
+      var left = p.life - p.age;
+      var sz = p.sz * (left < 0.3 ? Math.max(0.1, left / 0.3) : 1);
+      addBoxW(list, p.x, p.y, p.z, sz, sz, sz, p.col);
+    }
+  }
+
+  function addFx(list) {
+    for (var i = 0; i < FX.length; i++) {
+      var f = FX[i];
+      if (f.t < 0) continue;
+      var p = f.t / f.dur;
+      var y = f.y + (f.kind === 2 ? p * 2.2 : 0);
+      var cp = toCam(f.x, y, f.z);
+      if (cp[2] < NEAR + 0.05) continue;
+      var s = cam.f / cp[2];
+      var e = 1 - (1 - p) * (1 - p);
+      var r = (f.r0 + (f.r1 - f.r0) * e) * s;
+      var dx = f.x - cam.x, dy = y - cam.y, dz = f.z - cam.z, d = dx * dx + dy * dy + dz * dz;
+      var sx = cam.cx + cp[0] * s, sy = cam.cy - cp[1] * s, col, a;
+      if (f.kind === 0) {
+        col = "rgba(255,236,150," + (1 - p).toFixed(2) + ")";
+        list.push({ k: 3, sx: sx, sy: sy, r: r, col: col, d: d * 0.95 });
+      } else if (f.kind === 1) {
+        a = (0.95 * (1 - p)).toFixed(2);
+        col = "rgba(255," + Math.round(220 - 160 * p) + "," + Math.round(120 - 100 * p) + "," + a + ")";
+        list.push({ k: 3, sx: sx, sy: sy, r: r, col: col, d: d * 0.97 });
+        list.push({ k: 3, sx: sx, sy: sy, r: r * 0.55 * (1 - p * 0.6), col: "rgba(255,250,210," + a + ")", d: d * 0.96 });
+      } else {
+        col = "rgba(84,80,74," + (0.45 * (1 - p)).toFixed(2) + ")";
+        list.push({ k: 3, sx: sx, sy: sy, r: r, col: col, d: d * 0.98 });
+      }
+    }
+  }
+
   function buildScene(list) {
     var i, c;
     for (i = 0; i < TREES.length; i++) addTree(list, TREES[i]);
@@ -623,6 +841,8 @@
     addBoxW(list, SIGN.x, 1.35, SIGN.z, 0.75, 0.25, 0.05, WOOD);
     addTextBB(list, "MOSSVALE", SIGN.x, 1.35, SIGN.z, 0.2, "rgb(250,240,214)");
     addBot(list);
+    addParticles(list);
+    addFx(list);
   }
 
   function byDepth(a, b) { return b.d - a.d; }
@@ -642,6 +862,12 @@
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
+      } else if (it.k === 3) {
+        if (it.r < 0.5) continue;
+        ctx.fillStyle = it.col;
+        ctx.beginPath();
+        ctx.arc(it.sx, it.sy, Math.min(it.r, 2000), 0, Math.PI * 2);
+        ctx.fill();
       } else {
         ctx.font = "bold " + Math.round(it.fs) + "px system-ui, sans-serif";
         ctx.textAlign = "center";
@@ -651,6 +877,70 @@
         ctx.fillStyle = it.color;
         ctx.fillText(it.text, it.sx, it.sy);
       }
+    }
+  }
+
+  function projSeg(a3, b3) {
+    var a = toCam(a3[0], a3[1], a3[2]), b = toCam(b3[0], b3[1], b3[2]), k;
+    if (a[2] < NEAR && b[2] < NEAR) return null;
+    if (a[2] < NEAR) {
+      k = (NEAR - a[2]) / (b[2] - a[2]);
+      a = [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, NEAR];
+    } else if (b[2] < NEAR) {
+      k = (NEAR - b[2]) / (a[2] - b[2]);
+      b = [b[0] + (a[0] - b[0]) * k, b[1] + (a[1] - b[1]) * k, NEAR];
+    }
+    var sa = cam.f / a[2], sb = cam.f / b[2];
+    return [cam.cx + a[0] * sa, cam.cy - a[1] * sa, cam.cx + b[0] * sb, cam.cy - b[1] * sb];
+  }
+
+  function drawTracers() {
+    ctx.lineCap = "round";
+    for (var i = 0; i < TRACERS.length; i++) {
+      var tr = TRACERS[i];
+      var s = projSeg(tr.a, tr.b);
+      if (!s) continue;
+      ctx.strokeStyle = "rgba(255,240,170," + Math.min(1, tr.t / 0.09).toFixed(2) + ")";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(s[0], s[1]);
+      ctx.lineTo(s[2], s[3]);
+      ctx.stroke();
+    }
+    ctx.lineCap = "butt";
+  }
+
+  function drawAim() {
+    if (!gunOn || state !== "play") return;
+    var hy = aim.tree ? 1.3 * aim.tree.s : GUN_Y;
+    var target = [aim.x, hy, aim.z];
+    var seg = projSeg(gunLocal(-1.0, 0.04), target);
+    if (seg) {
+      ctx.strokeStyle = aim.tree ? "rgba(255,90,70,0.45)" : "rgba(255,255,255,0.22)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 5]);
+      ctx.beginPath();
+      ctx.moveTo(seg[0], seg[1]);
+      ctx.lineTo(seg[2], seg[3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    var cp = toCam(target[0], target[1], target[2]);
+    if (cp[2] < NEAR) return;
+    var s = cam.f / cp[2];
+    var x = cam.cx + cp[0] * s, y = cam.cy - cp[1] * s;
+    var col = aim.tree ? "rgb(255,90,70)" : "rgba(255,255,255,0.9)";
+    var r = aim.tree ? 11 : 9;
+    for (var pass = 0; pass < 2; pass++) {
+      ctx.strokeStyle = pass === 0 ? "rgba(0,0,0,0.45)" : col;
+      ctx.lineWidth = pass === 0 ? 4 : 2;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.moveTo(x - r - 6, y); ctx.lineTo(x - r + 3, y);
+      ctx.moveTo(x + r - 3, y); ctx.lineTo(x + r + 6, y);
+      ctx.moveTo(x, y - r - 6); ctx.lineTo(x, y - r + 3);
+      ctx.moveTo(x, y + r - 3); ctx.lineTo(x, y + r + 6);
+      ctx.stroke();
     }
   }
 
@@ -711,13 +1001,23 @@
     ctx.fillStyle = gr;
     ctx.fillRect(0, gy, W, H - gy);
 
+    var shaking = shake > 0;
+    if (shaking) {
+      ctx.save();
+      ctx.translate((Math.random() - 0.5) * shake * 16, (Math.random() - 0.5) * shake * 16);
+    }
+
     drawGround();
 
     var list = [];
     buildScene(list);
     list.sort(byDepth);
     drawList(list);
+    drawTracers();
 
+    if (shaking) ctx.restore();
+
+    drawAim();
     drawStick();
     drawCompass();
   }
@@ -746,10 +1046,26 @@
       }
       return;
     }
+    if (key === "g") {
+      e.preventDefault();
+      if (!e.repeat) setGun(!gunOn);
+      return;
+    }
+    if (key === "f" || key === " ") {
+      e.preventDefault();
+      if (state !== "play") {
+        window.gameTest.inputsHandled++;
+        startGame();
+      } else if (!e.repeat) {
+        if (!gunOn) setGun(true);
+        else fire();
+      }
+      return;
+    }
     if (key === "m") {
       e.preventDefault();
       toggleMusic();
-    } else if ((key === "enter" || key === " ") && state !== "play") {
+    } else if (key === "enter" && state !== "play") {
       e.preventDefault();
       window.gameTest.inputsHandled++;
       startGame();
@@ -772,6 +1088,7 @@
   });
 
   musicBtn.addEventListener("click", function () { toggleMusic(); musicBtn.blur(); });
+  gunBtn.addEventListener("click", function () { setGun(!gunOn); gunBtn.blur(); });
 
   function setStick(x, y) {
     var dx = (x - stick.ox) / STICK_R, dy = (y - stick.oy) / STICK_R;
@@ -786,13 +1103,17 @@
     var lx = e.clientX - r.left, ly = e.clientY - r.top;
     window.gameTest.inputsHandled++;
     if (state !== "play") startGame();
+    if (e.pointerType === "mouse" && locked) {
+      fire();
+      return;
+    }
     if (e.pointerType === "mouse" && !locked) requestLock();
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
     if (e.pointerType !== "mouse" && lx < r.width / 2 && stickId === null) {
       stickId = e.pointerId;
       stick = { ox: lx, oy: ly, dx: 0, dy: 0 };
     } else if (!locked) {
-      lookers[e.pointerId] = { x: e.clientX };
+      lookers[e.pointerId] = { x: e.clientX, sx: e.clientX, sy: e.clientY, t: performance.now() };
     }
   });
 
@@ -812,7 +1133,13 @@
 
   function endPointer(e) {
     if (e.pointerId === stickId) { stickId = null; stick = null; }
+    var l = lookers[e.pointerId];
     delete lookers[e.pointerId];
+    // a quick tap (not a drag) on the view fires the pistol
+    if (l && e.type === "pointerup" && gunOn && state === "play") {
+      var mx = e.clientX - l.sx, my = e.clientY - l.sy;
+      if (mx * mx + my * my < 64 && performance.now() - l.t < 350) fire();
+    }
   }
   canvas.addEventListener("pointerup", endPointer);
   canvas.addEventListener("pointercancel", endPointer);
@@ -820,5 +1147,7 @@
   window.addEventListener("resize", resize);
   resize();
   updateMusicBtn();
+  updateGunBtn();
+  updateTreeCount();
   requestAnimationFrame(frame);
 })();

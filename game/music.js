@@ -5,7 +5,7 @@
   // No audio files are used: every kick, hat, bass note and stab is generated here.
 
   var AC = window.AudioContext || window.webkitAudioContext;
-  var ctx = null, master = null, noiseBuf = null;
+  var ctx = null, master = null, noiseBuf = null, sfxGain = null;
   var playing = false, muted = false;
   var BPM = 128;
   var STEP = 60 / BPM / 4; // sixteenth note
@@ -36,6 +36,9 @@
     master = ctx.createGain();
     master.gain.value = 0;
     master.connect(comp);
+    sfxGain = ctx.createGain();
+    sfxGain.gain.value = 0.6;
+    sfxGain.connect(comp);
     comp.connect(ctx.destination);
     var len = ctx.sampleRate;
     noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
@@ -143,6 +146,42 @@
     }
   }
 
+  // ---- sound effects (pistol shot, explosion) ----
+  function sfxNoise(t, type, freq, q, peak, decay) {
+    var s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    s.buffer = noiseBuf;
+    s.loop = true;
+    f.type = type; f.frequency.value = freq; f.Q.value = q;
+    env(g, t, peak, decay);
+    s.connect(f); f.connect(g); g.connect(sfxGain);
+    s.start(t, Math.random() * 0.5);
+    s.stop(t + decay + 0.05);
+  }
+
+  function sfxTone(t, type, f0, f1, peak, decay) {
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(f1, t + decay);
+    env(g, t, peak, decay);
+    o.connect(g); g.connect(sfxGain);
+    o.start(t); o.stop(t + decay + 0.05);
+  }
+
+  function sfx(name) {
+    if (!init()) return;
+    if (ctx.state === "suspended" && ctx.resume) ctx.resume();
+    var t = ctx.currentTime + 0.01;
+    if (name === "shot") {
+      sfxNoise(t, "bandpass", 2400, 0.8, 0.5, 0.09);
+      sfxTone(t, "square", 320, 90, 0.16, 0.07);
+    } else if (name === "boom") {
+      sfxNoise(t, "lowpass", 1100, 0.7, 0.9, 0.8);
+      sfxNoise(t, "lowpass", 380, 0.5, 0.7, 1.2);
+      sfxTone(t, "sine", 120, 32, 0.8, 0.6);
+    }
+  }
+
   function applyVolume() {
     if (!ctx) return;
     var now = ctx.currentTime;
@@ -200,6 +239,7 @@
     stop: stop,
     tick: tick,
     setMuted: setMuted,
+    sfx: sfx,
     isMuted: function () { return muted; }
   };
 })();
