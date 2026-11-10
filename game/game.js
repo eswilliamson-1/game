@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var GOAL = "Explore Mossvale: find the old cottage, the pond, and the rocky ridge, and work your way around the roaring datacenter in the middle. Equip your pistol (G or the Pistol button) to blast trees out of your way. Press I or the Inventory button to see what you carry.";
+  var GOAL = "Explore Mossvale and discover all 4 places: the old cottage, the pond, the narrow pass through the rocky ridge, and the roaring datacenter in the middle. Equip your pistol (G or the Pistol button) to blast trees out of your way. Press I or the Inventory button to see what you carry and where you have been.";
   window.gameTest = { inputsHandled: 0, goal: GOAL };
 
   var music = window.TechnoMusic || { start: function () {}, stop: function () {}, tick: function () {}, setMuted: function () {}, isMuted: function () { return true; }, sfx: function () {}, setHum: function () {} };
@@ -22,7 +22,10 @@
   var invList = document.getElementById("invList");
   var invEmpty = document.getElementById("invEmpty");
   var invClose = document.getElementById("invClose");
+  var placesList = document.getElementById("placesList");
   var treeCountEl = document.getElementById("treeCount");
+  var placeCountEl = document.getElementById("placeCount");
+  var bannerEl = document.getElementById("banner");
   var lockHint = document.getElementById("lockHint");
   var resetBtn = document.getElementById("resetBtn");
   var resetPanel = document.getElementById("resetPanel");
@@ -339,6 +342,33 @@
 
   var ALL_TREES = TREES.slice();
 
+  // ---- places to discover ----
+  var PLACES = [
+    { id: "cottage", name: "The Old Cottage", rect: { x0: HUT.x - HUT.hx, x1: HUT.x + HUT.hx, z0: HUT.z - HUT.hz, z1: HUT.z + HUT.hz }, r: 2.5 },
+    { id: "pond", name: "The Pond", x: POND.x, z: POND.z, r: POND.r + 2.8 },
+    { id: "pass", name: "The Ridge Pass", x: 12 + 5.5 * 1.6, z: 15 + 5.5 * 0.95, r: 2.4 },
+    { id: "datacenter", name: "The Datacenter", rect: DC_R, r: 2.5 }
+  ];
+  var found = {};
+  var bannerT = 0;
+
+  function foundCount() {
+    var n = 0;
+    for (var i = 0; i < PLACES.length; i++) if (found[PLACES[i].id]) n++;
+    return n;
+  }
+
+  function placeDist(p, x, z) {
+    var dx, dz;
+    if (p.rect) {
+      dx = Math.max(p.rect.x0 - x, 0, x - p.rect.x1);
+      dz = Math.max(p.rect.z0 - z, 0, z - p.rect.z1);
+    } else {
+      dx = x - p.x; dz = z - p.z;
+    }
+    return Math.sqrt(dx * dx + dz * dz);
+  }
+
   var player = { x: START_X, z: START_Z, yaw: 0, walk: 0, walkAmt: 0, inventory: [] };
   var camYaw = 0;
   var cam = { x: 0, y: 0, z: 0, ct: 1, st: 0, cp: 1, sp: 0, f: 300, cx: 150, cy: 200 };
@@ -369,6 +399,25 @@
     if (who === player) renderInventory();
   }
 
+  function renderPlaces() {
+    if (!placesList) return;
+    while (placesList.firstChild) placesList.removeChild(placesList.firstChild);
+    for (var i = 0; i < PLACES.length; i++) {
+      var p = PLACES[i], got = !!found[p.id];
+      var li = document.createElement("li");
+      if (!got) li.className = "unknown";
+      var nm = document.createElement("span");
+      nm.className = "invName";
+      nm.textContent = got ? p.name : "???";
+      var st = document.createElement("span");
+      st.className = "invCount";
+      st.textContent = got ? "Found" : "Not yet";
+      li.appendChild(nm);
+      li.appendChild(st);
+      placesList.appendChild(li);
+    }
+  }
+
   function renderInventory() {
     while (invList.firstChild) invList.removeChild(invList.firstChild);
     var shown = 0;
@@ -394,6 +443,7 @@
       invEmpty.classList.add("hidden");
       invList.classList.remove("hidden");
     }
+    renderPlaces();
   }
 
   function updateInvBtn() {
@@ -433,10 +483,11 @@
   }
 
   function saveProgress() {
-    var gone = [];
-    for (var i = 0; i < ALL_TREES.length; i++) if (ALL_TREES[i].gone) gone.push(ALL_TREES[i].id);
+    var gone = [], places = [], i;
+    for (i = 0; i < ALL_TREES.length; i++) if (ALL_TREES[i].gone) gone.push(ALL_TREES[i].id);
+    for (i = 0; i < PLACES.length; i++) if (found[PLACES[i].id]) places.push(PLACES[i].id);
     try {
-      localStorage.setItem(PROGRESS_KEY, JSON.stringify({ v: 2, cleared: cleared, wood: woodCount(), gone: gone }));
+      localStorage.setItem(PROGRESS_KEY, JSON.stringify({ v: 2, cleared: cleared, wood: woodCount(), gone: gone, places: places }));
     } catch (e) { /* storage unavailable: play on without saving */ }
   }
 
@@ -466,19 +517,33 @@
     var d;
     try { d = JSON.parse(text); } catch (e) { return false; }
     if (!d || typeof d !== "object" || (d.v !== 1 && d.v !== 2)) return false;
-    var any = false;
+    var any = false, i, j;
     // older saves were made before the datacenter moved in and the trees shifted, so only their counts carry over
     if (d.v === 2 && Array.isArray(d.gone)) {
-      for (var i = 0; i < d.gone.length && i < 1000; i++) {
+      for (i = 0; i < d.gone.length && i < 1000; i++) {
         var id = d.gone[i];
         if (typeof id !== "number" || id !== Math.floor(id) || id < 0 || id >= ALL_TREES.length) continue;
         if (removeTree(ALL_TREES[id])) any = true;
+      }
+    }
+    if (Array.isArray(d.places)) {
+      for (i = 0; i < d.places.length && i < 20; i++) {
+        var pid = d.places[i];
+        if (typeof pid !== "string") continue;
+        for (j = 0; j < PLACES.length; j++) {
+          if (PLACES[j].id === pid) { found[pid] = true; any = true; }
+        }
       }
     }
     cleared = safeCount(d.cleared);
     var w = safeCount(d.wood);
     if (w > 0) addItem(player, "wood", w);
     return any || cleared > 0 || w > 0;
+  }
+
+  function hideBanner() {
+    bannerT = 0;
+    if (bannerEl) bannerEl.classList.add("hidden");
   }
 
   function resetValley() {
@@ -496,10 +561,13 @@
     cleared = 0;
     var it = findItem(player.inventory, "wood");
     if (it) it.count = 0;
+    found = {};
+    hideBanner();
     PARTS.length = 0; FX.length = 0; TRACERS.length = 0;
     aim.tree = null;
     collide();
     updateTreeCount();
+    updatePlaceCount();
     renderInventory();
     saveProgress();
   }
@@ -512,6 +580,33 @@
       freeCursor();
     } else {
       resetPanel.classList.add("hidden");
+    }
+  }
+
+  // ---- discovery ----
+  function updatePlaceCount() {
+    if (placeCountEl) placeCountEl.textContent = "Places found: " + foundCount() + " / " + PLACES.length;
+  }
+
+  function showBanner(name) {
+    if (!bannerEl) return;
+    bannerEl.textContent = "Discovered: " + name;
+    bannerEl.classList.remove("hidden");
+    bannerT = 2.8;
+  }
+
+  function checkPlaces() {
+    for (var i = 0; i < PLACES.length; i++) {
+      var p = PLACES[i];
+      if (found[p.id]) continue;
+      if (placeDist(p, player.x, player.z) <= p.r) {
+        found[p.id] = true;
+        showBanner(p.name);
+        music.sfx("chime");
+        updatePlaceCount();
+        renderInventory();
+        saveProgress();
+      }
     }
   }
 
@@ -952,12 +1047,17 @@
       TRACERS[i].t -= dt;
       if (TRACERS[i].t <= 0) TRACERS.splice(i, 1);
     }
+    if (bannerT > 0) {
+      bannerT -= dt;
+      if (bannerT <= 0) hideBanner();
+    }
   }
 
   function update(dt) {
     glowT += dt;
     if (state === "play") {
       updateMovement(dt);
+      checkPlaces();
       music.setHum(dcNoise());
     }
     updateEffects(dt);
@@ -1558,6 +1658,7 @@
   updateGunBtn();
   updateInvBtn();
   updateTreeCount();
+  updatePlaceCount();
   renderInventory();
   requestAnimationFrame(frame);
   loadAccount();

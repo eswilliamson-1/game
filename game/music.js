@@ -224,7 +224,7 @@
     humGain.gain.setTargetAtTime(humLevel * HUM_VOL, ctx.currentTime, 0.3);
   }
 
-  // ---- sound effects (pistol shot, explosion) ----
+  // ---- sound effects (pistol shot, explosion, discovery chime) ----
   function sfxNoise(t, type, freq, q, peak, decay) {
     var s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
     s.buffer = noiseBuf;
@@ -246,6 +246,18 @@
     o.start(t); o.stop(t + decay + 0.05);
   }
 
+  // a gentle bell-like note with a slow swell
+  function softBell(t, freq, peak, decay) {
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(peak, t + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+    o.connect(g); g.connect(sfxGain);
+    o.start(t); o.stop(t + decay + 0.05);
+  }
+
   function sfx(name) {
     if (!init()) return;
     if (ctx.state === "suspended" && ctx.resume) ctx.resume();
@@ -257,6 +269,10 @@
       sfxNoise(t, "lowpass", 1100, 0.7, 0.9, 0.8);
       sfxNoise(t, "lowpass", 380, 0.5, 0.7, 1.2);
       sfxTone(t, "sine", 120, 32, 0.8, 0.6);
+    } else if (name === "chime") {
+      softBell(t, mtof(76), 0.16, 1.1);
+      softBell(t + 0.14, mtof(81), 0.14, 1.2);
+      softBell(t + 0.28, mtof(88), 0.1, 1.5);
     }
   }
 
