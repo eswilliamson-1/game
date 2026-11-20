@@ -147,6 +147,9 @@
   var DC_GLASS = [30, 40, 54], DC_LED_G = [110, 255, 150], DC_LED_B = [110, 190, 255], DC_LED_OFF = [44, 60, 70];
   var DC_DOOR = [90, 98, 110], DC_VENT = [48, 52, 60], DC_BLADE = [150, 156, 164];
   var DC_UNIT = [196, 200, 204], DC_UNIT_TOP = [170, 176, 182], DC_FAN = [56, 60, 66], DC_PAD = [146, 148, 144];
+  var LOT_EDGE = [150, 150, 144], ASPHALT = [72, 74, 78], LOT_LINE = [238, 238, 230];
+  var TIRE = [28, 28, 32], CAR_GLASS = [44, 58, 74], CAR_BED = [52, 50, 48], CAR_TRIM = [36, 38, 44];
+  var CAR_PAINTS = [[196, 52, 48], [48, 92, 170], [232, 232, 226], [42, 44, 50], [152, 156, 162], [44, 120, 86], [220, 172, 62], [118, 40, 58], [86, 148, 196], [206, 110, 44]];
 
   // ---- deterministic random so the world is always the same ----
   var seed = 20240611;
@@ -182,6 +185,21 @@
   var DC_HALF = [DC.hx, DC.hx, DC.hz, DC.hz];
   var DC_YAW = [Math.PI, 0, -Math.PI / 2, Math.PI / 2];
   var dcPuffT = 0;
+
+  // the parking lot in the southwest corner
+  var LOT = { x0: -30.6, x1: -8.6, z0: -30.6, z1: -8.6 };
+  var STALL_W = 2.5, STALL_D = 4.6, STALL_X0 = -30.1, STALL_N = 7;
+  // each row: [south edge z, which side opens onto a driving lane (+1 north, -1 south)]
+  var LOT_ROWS = [[-30.1, 1], [-21.5, -1], [-16.9, 1]];
+  // hw, hl, wheel height, parts [lz, y0, y1, inset, hz, look]; look: 0 paint, 1 windows + painted roof, 2 truck bed, 3 trim
+  var CAR_KINDS = [
+    { hw: 0.85, hl: 2.1, wh: 0.34, parts: [[0, 0.34, 0.86, 0, 2.1, 0], [-0.15, 0.86, 1.32, 0.08, 0.95, 1]] },
+    { hw: 0.86, hl: 2.25, wh: 0.34, parts: [[0, 0.34, 0.88, 0, 2.25, 0], [-0.45, 0.88, 1.38, 0.08, 1.45, 1]] },
+    { hw: 0.95, hl: 2.2, wh: 0.4, parts: [[0, 0.4, 1.08, 0, 2.2, 0], [-0.3, 1.08, 1.72, 0.06, 1.55, 1]] },
+    { hw: 0.95, hl: 2.45, wh: 0.4, parts: [[1.2, 0.4, 1.05, 0, 1.25, 0], [-1.25, 0.4, 0.98, 0, 1.2, 2], [0.65, 1.05, 1.72, 0.05, 0.6, 1]] },
+    { hw: 0.9, hl: 2.05, wh: 0.26, parts: [[0, 0.26, 0.66, 0, 2.05, 0], [-0.2, 0.66, 0.98, 0.12, 0.75, 1], [-1.85, 0.66, 0.8, 0.1, 0.14, 3]] }
+  ];
+  var CARS = [];
 
   var RECTS = [], CIRCS = [], TREES = [], ROCKS = [], RIDGE = [], WALLS = [];
   var BLOCKERS = [];
@@ -259,8 +277,8 @@
       s = 0.3 + rnd() * 0.5;
       if (!isClear(x, z, s + 0.4)) continue;
       h = s * (0.6 + rnd() * 0.5);
-      ROCKS.push({ x: x, z: z, s: s, h: h, col: ROCK_COLS[Math.floor(rnd() * 3) % 3] });
       rc = { x0: x - s, x1: x + s, z0: z - s, z1: z + s };
+      ROCKS.push({ x: x, z: z, s: s, h: h, col: ROCK_COLS[Math.floor(rnd() * 3) % 3], rc: rc });
       RECTS.push(rc);
       if (h * 2 > GUN_Y) BLOCKERS.push(rc);
     }
@@ -341,6 +359,77 @@
   })();
 
   var ALL_TREES = TREES.slice();
+
+  // ---- parking lot (built after the rest so saved tree numbers stay the same) ----
+  function inLot(x, z, m) {
+    return x > LOT.x0 - m && x < LOT.x1 + m && z > LOT.z0 - m && z < LOT.z1 + m;
+  }
+
+  function lotQuad(x0, z0, x1, z1, col, y, r) {
+    GROUND.push({ pts: [[x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1]], col: col, a: 1, x: (x0 + x1) / 2, z: (z0 + z1) / 2, r: r });
+  }
+
+  function dropFrom(arr, item) {
+    var k = arr.indexOf(item);
+    if (k >= 0) arr.splice(k, 1);
+  }
+
+  function buildParkingLot() {
+    var i, j, t, c, lw = 0.07;
+    // pave over whatever grew here
+    for (i = TREES.length - 1; i >= 0; i--) {
+      t = TREES[i];
+      if (!inLot(t.x, t.z, 1.2)) continue;
+      t.paved = true;
+      TREES.splice(i, 1);
+      dropFrom(CIRCS, t.circ);
+      dropFrom(SHADOWS, t.shadow);
+    }
+    for (i = ROCKS.length - 1; i >= 0; i--) {
+      c = ROCKS[i];
+      if (!inLot(c.x, c.z, c.s + 0.4)) continue;
+      ROCKS.splice(i, 1);
+      dropFrom(RECTS, c.rc);
+      dropFrom(BLOCKERS, c.rc);
+    }
+    for (i = FLOWERS.length - 1; i >= 0; i--) {
+      if (inLot(FLOWERS[i].x, FLOWERS[i].z, 0.3)) FLOWERS.splice(i, 1);
+    }
+
+    // curb edge, asphalt, then white stall lines
+    lotQuad(LOT.x0 - 0.35, LOT.z0 - 0.35, LOT.x1 + 0.35, LOT.z1 + 0.35, LOT_EDGE, 0.012, 0);
+    lotQuad(LOT.x0, LOT.z0, LOT.x1, LOT.z1, ASPHALT, 0.013, 0);
+    var xEnd = STALL_X0 + STALL_N * STALL_W;
+    for (j = 0; j < LOT_ROWS.length; j++) {
+      var rz = LOT_ROWS[j][0], open = LOT_ROWS[j][1];
+      for (i = 0; i <= STALL_N; i++) {
+        var lx = STALL_X0 + i * STALL_W;
+        lotQuad(lx - lw, rz, lx + lw, rz + STALL_D, LOT_LINE, 0.015, 1);
+      }
+      var bz = open > 0 ? rz : rz + STALL_D;
+      lotQuad(STALL_X0 - lw, bz - lw, xEnd + lw, bz + lw, LOT_LINE, 0.015, 1);
+    }
+
+    // parked vehicles
+    var n = 0;
+    for (j = 0; j < LOT_ROWS.length; j++) {
+      var z0 = LOT_ROWS[j][0], op = LOT_ROWS[j][1];
+      for (i = 0; i < STALL_N; i++) {
+        if (rnd() < 0.16) continue;
+        var K = CAR_KINDS[(n * 2 + Math.floor(rnd() * 3)) % CAR_KINDS.length];
+        n++;
+        var cx = STALL_X0 + (i + 0.5) * STALL_W + (rnd() - 0.5) * 0.24;
+        var cz = z0 + STALL_D / 2 + op * Math.max(0, K.hl - 2.15);
+        var car = { x: cx, z: cz, k: K, dir: rnd() < 0.75 ? -op : op, col: CAR_PAINTS[Math.floor(rnd() * CAR_PAINTS.length) % CAR_PAINTS.length] };
+        car.rc = { x0: cx - K.hw - 0.03, x1: cx + K.hw + 0.03, z0: cz - K.hl, z1: cz + K.hl };
+        CARS.push(car);
+        RECTS.push(car.rc);
+        BLOCKERS.push(car.rc);
+      }
+    }
+  }
+
+  buildParkingLot();
 
   // ---- places to discover ----
   var PLACES = [
@@ -551,6 +640,7 @@
     TREES.length = 0;
     for (i = 0; i < ALL_TREES.length; i++) {
       t = ALL_TREES[i];
+      if (t.paved) continue;
       t.gone = false;
       t.shadow.pts = t.shadowPts0;
       t.shadow.col = TREE_SHADOW_COL;
@@ -1160,6 +1250,23 @@
     }
   }
 
+  // a parked, unbranded vehicle built from a few boxes
+  function addCar(list, c) {
+    var dx = c.x - cam.x, dz = c.z - cam.z;
+    if (dx * dx + dz * dz > DRAW_DIST * DRAW_DIST) return;
+    var K = c.k, d = c.dir, wz = K.hl - 0.65, i, p, col, top;
+    addBoxW(list, c.x, K.wh / 2, c.z + wz, K.hw + 0.03, K.wh / 2, K.wh * 0.95, TIRE);
+    addBoxW(list, c.x, K.wh / 2, c.z - wz, K.hw + 0.03, K.wh / 2, K.wh * 0.95, TIRE);
+    for (i = 0; i < K.parts.length; i++) {
+      p = K.parts[i];
+      col = c.col; top = null;
+      if (p[5] === 1) { col = CAR_GLASS; top = c.col; }
+      else if (p[5] === 2) top = CAR_BED;
+      else if (p[5] === 3) col = CAR_TRIM;
+      addBoxW(list, c.x, (p[1] + p[2]) / 2, c.z + p[0] * d, K.hw - p[3], (p[2] - p[1]) / 2, p[4], col, top);
+    }
+  }
+
   function addHut(list) {
     var h = HUT, fz = h.z - h.hz;
     addBoxW(list, h.x, h.h / 2, h.z, h.hx, h.h / 2, h.hz, HUT_WALL, HUT_WALL);
@@ -1298,6 +1405,7 @@
   function buildScene(list) {
     var i, c;
     for (i = 0; i < TREES.length; i++) addTree(list, TREES[i]);
+    for (i = 0; i < CARS.length; i++) addCar(list, CARS[i]);
     for (i = 0; i < ROCKS.length; i++) {
       c = ROCKS[i];
       addBoxW(list, c.x, c.h, c.z, c.s, c.h, c.s, c.col);
