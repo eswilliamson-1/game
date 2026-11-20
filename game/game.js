@@ -40,6 +40,9 @@
   try { hadLocalMusicPref = localStorage.getItem(MUSIC_KEY) !== null; } catch (e) { hadLocalMusicPref = false; }
   var musicTouched = false;
   var lastStored = null;
+  var accountState = "idle"; // idle -> loading -> ready
+  var resetBeforeSync = false;
+  var storeTimer = null, lastStoreAt = -1e9, STORE_GAP = 8000;
 
   function accountApi() {
     var g = window.gameSave;
@@ -48,15 +51,21 @@
   }
 
   function saveText() {
-    return JSON.stringify({ v: 1, musicMuted: !!music.isMuted() });
+    return JSON.stringify({ v: 2, musicMuted: !!music.isMuted(), progress: currentProgress() });
   }
 
   function storeAccount() {
     var api = accountApi();
     if (!api) return;
+    // never write before we've seen what the account already holds
+    if (accountState !== "ready") {
+      if (accountState === "idle") loadAccount();
+      return;
+    }
     var t = saveText();
-    if (t === lastStored) return;
+    if (t.length > 32000 || t === lastStored) return;
     lastStored = t;
+    lastStoreAt = performance.now();
     try {
       var p = api.store(t);
       if (p && typeof p.then === "function") {
@@ -71,37 +80,63 @@
     }
   }
 
-  function applyAccount(text) {
-    if (typeof text !== "string" || !text || text.length > 32000) return false;
+  // tree clearing can happen often, so account saves for it are spaced out
+  function scheduleStore() {
+    if (storeTimer !== null || !accountApi()) return;
+    var wait = Math.max(0, lastStoreAt + STORE_GAP - performance.now());
+    storeTimer = setTimeout(function () {
+      storeTimer = null;
+      storeAccount();
+    }, wait);
+  }
+
+  function parseAccount(text) {
+    if (typeof text !== "string" || !text || text.length > 32000) return null;
     var d;
-    try { d = JSON.parse(text); } catch (e) { return false; }
-    if (!d || typeof d !== "object") return false;
-    // the browser's own setting wins; the account fills it in on a new browser
-    if (typeof d.musicMuted === "boolean" && !hadLocalMusicPref && !musicTouched) {
-      music.setMuted(d.musicMuted);
+    try { d = JSON.parse(text); } catch (e) { return null; }
+    if (!d || typeof d !== "object" || Array.isArray(d)) return null;
+    return {
+      musicMuted: typeof d.musicMuted === "boolean" ? d.musicMuted : null,
+      progress: normalizeProgress(d.progress, true)
+    };
+  }
+
+  function reconcileAccount(text) {
+    var acct = (text === null || text === undefined) ? null : parseAccount(text);
+    // the browser's own music setting wins; the account fills it in on a new browser
+    if (acct && acct.musicMuted !== null && !hadLocalMusicPref && !musicTouched) {
+      music.setMuted(acct.musicMuted);
       updateMusicBtn();
     }
-    return true;
+    // whichever copy of the valley has more progress is kept
+    if (acct && acct.progress && !resetBeforeSync && accountIsAhead(acct.progress, currentProgress())) {
+      applyProgress(acct.progress);
+      saveProgress();
+      if (overlayTitle && state !== "play") overlayTitle.textContent = "Welcome back to Mossvale";
+      showMessage("Your valley was loaded from your account");
+    }
+    if (typeof text === "string" && saveText() === text) {
+      lastStored = text;
+      return;
+    }
+    if (acct || resetBeforeSync || hasProgress(currentProgress()) || hadLocalMusicPref || musicTouched) storeAccount();
   }
 
   function loadAccount() {
     var api = accountApi();
-    if (!api) return;
+    if (!api || accountState !== "idle") return;
+    accountState = "loading";
     try {
       var p = api.load();
       if (p && typeof p.then === "function") {
         p.then(function (text) {
-          if (text === null || text === undefined) {
-            if (hadLocalMusicPref || musicTouched) storeAccount();
-            return;
-          }
-          if (applyAccount(text)) {
-            if (saveText() !== text) storeAccount();
-            else lastStored = text;
-          }
-        }, function () { /* unavailable: keep local only */ });
+          accountState = "ready";
+          try { reconcileAccount(text); } catch (e) { /* keep playing locally */ }
+        }, function () { accountState = "idle"; });
+      } else {
+        accountState = "idle";
       }
-    } catch (e) { /* unavailable: keep local only */ }
+    } catch (e) { accountState = "idle"; }
   }
 
   function updateMusicBtn() {
@@ -587,7 +622,7 @@
 
   addItem(player, "pistol", 1);
 
-  // ---- saved progress (this browser only) ----
+  // ---- saved progress (this browser, plus the account copy when logged in) ----
   var PROGRESS_KEY = "mossvaleProgress";
   var resetOpen = false;
 
@@ -596,12 +631,39 @@
     return it ? it.count : 0;
   }
 
-  function saveProgress() {
+  function setWood(n) {
+    var it = findItem(player.inventory, "wood");
+    if (it) it.count = n;
+    else if (n > 0) addItem(player, "wood", n);
+  }
+
+  function currentProgress() {
     var gone = [], places = [], i;
     for (i = 0; i < ALL_TREES.length; i++) if (ALL_TREES[i].gone) gone.push(ALL_TREES[i].id);
     for (i = 0; i < PLACES.length; i++) if (found[PLACES[i].id]) places.push(PLACES[i].id);
+    return { cleared: cleared, wood: woodCount(), gone: gone, places: places };
+  }
+
+  function hasProgress(p) {
+    return p.cleared > 0 || p.wood > 0 || p.gone.length > 0 || p.places.length > 0;
+  }
+
+  // how far along a valley is: places count for a lot, every cleared tree counts too
+  function progressPoints(p) {
+    return p.cleared + p.places.length * 5;
+  }
+
+  function accountIsAhead(a, mine) {
+    var pa = progressPoints(a), pm = progressPoints(mine);
+    if (pa !== pm) return pa > pm;
+    if (a.gone.length !== mine.gone.length) return a.gone.length > mine.gone.length;
+    return a.wood > mine.wood;
+  }
+
+  function saveProgress() {
+    var p = currentProgress();
     try {
-      localStorage.setItem(PROGRESS_KEY, JSON.stringify({ v: 2, cleared: cleared, wood: woodCount(), gone: gone, places: places }));
+      localStorage.setItem(PROGRESS_KEY, JSON.stringify({ v: 2, cleared: p.cleared, wood: p.wood, gone: p.gone, places: p.places }));
     } catch (e) { /* storage unavailable: play on without saving */ }
   }
 
@@ -624,20 +686,18 @@
     return Math.min(1000000000, Math.floor(v));
   }
 
-  function loadProgress() {
-    var text = null;
-    try { text = localStorage.getItem(PROGRESS_KEY); } catch (e) { text = null; }
-    if (typeof text !== "string" || !text || text.length > 32000) return false;
-    var d;
-    try { d = JSON.parse(text); } catch (e) { return false; }
-    if (!d || typeof d !== "object" || (d.v !== 1 && d.v !== 2)) return false;
-    var any = false, i, j;
-    // older saves were made before the datacenter moved in and the trees shifted, so only their counts carry over
-    if (d.v === 2 && Array.isArray(d.gone)) {
+  // turn saved data (from this browser or the account) into a clean progress record
+  function normalizeProgress(d, allowGone) {
+    if (!d || typeof d !== "object" || Array.isArray(d)) return null;
+    var p = { cleared: safeCount(d.cleared), wood: safeCount(d.wood), gone: [], places: [] };
+    var seen = {}, i, j;
+    if (allowGone && Array.isArray(d.gone)) {
       for (i = 0; i < d.gone.length && i < 1000; i++) {
         var id = d.gone[i];
         if (typeof id !== "number" || id !== Math.floor(id) || id < 0 || id >= ALL_TREES.length) continue;
-        if (removeTree(ALL_TREES[id])) any = true;
+        if (seen[id] || ALL_TREES[id].paved) continue;
+        seen[id] = true;
+        p.gone.push(id);
       }
     }
     // the old cottage is gone, so a saved "cottage" discovery simply no longer matches anything
@@ -646,22 +706,15 @@
         var pid = d.places[i];
         if (typeof pid !== "string") continue;
         for (j = 0; j < PLACES.length; j++) {
-          if (PLACES[j].id === pid) { found[pid] = true; any = true; }
+          if (PLACES[j].id === pid && p.places.indexOf(pid) < 0) p.places.push(pid);
         }
       }
     }
-    cleared = safeCount(d.cleared);
-    var w = safeCount(d.wood);
-    if (w > 0) addItem(player, "wood", w);
-    return any || cleared > 0 || w > 0;
+    return p;
   }
 
-  function hideBanner() {
-    bannerT = 0;
-    if (bannerEl) bannerEl.classList.add("hidden");
-  }
-
-  function resetValley() {
+  // put every tree back, empty the wood pile and forget places (no saving here)
+  function resetWorld() {
     var i, t;
     TREES.length = 0;
     for (i = 0; i < ALL_TREES.length; i++) {
@@ -675,17 +728,57 @@
       if (CIRCS.indexOf(t.circ) < 0) CIRCS.push(t.circ);
     }
     cleared = 0;
-    var it = findItem(player.inventory, "wood");
-    if (it) it.count = 0;
+    setWood(0);
     found = {};
     hideBanner();
     PARTS.length = 0; FX.length = 0; TRACERS.length = 0;
     aim.tree = null;
-    collide();
+  }
+
+  function refreshHud() {
     updateTreeCount();
     updatePlaceCount();
     renderInventory();
+  }
+
+  function applyProgress(p) {
+    var i;
+    resetWorld();
+    for (i = 0; i < p.gone.length; i++) removeTree(ALL_TREES[p.gone[i]]);
+    for (i = 0; i < p.places.length; i++) found[p.places[i]] = true;
+    cleared = p.cleared;
+    setWood(p.wood);
+    collide();
+    refreshHud();
+  }
+
+  function loadProgress() {
+    var text = null;
+    try { text = localStorage.getItem(PROGRESS_KEY); } catch (e) { text = null; }
+    if (typeof text !== "string" || !text || text.length > 32000) return false;
+    var d;
+    try { d = JSON.parse(text); } catch (e) { return false; }
+    if (!d || typeof d !== "object" || (d.v !== 1 && d.v !== 2)) return false;
+    // older saves were made before the datacenter moved in and the trees shifted, so only their counts carry over
+    var p = normalizeProgress(d, d.v === 2);
+    if (!p) return false;
+    applyProgress(p);
+    return hasProgress(p);
+  }
+
+  function hideBanner() {
+    bannerT = 0;
+    if (bannerEl) bannerEl.classList.add("hidden");
+  }
+
+  function resetValley() {
+    resetWorld();
+    collide();
+    refreshHud();
     saveProgress();
+    // the account copy is reset too (or as soon as the account answers)
+    if (accountState !== "ready") resetBeforeSync = true;
+    storeAccount();
   }
 
   function setResetConfirm(open) {
@@ -704,11 +797,15 @@
     if (placeCountEl) placeCountEl.textContent = "Places found: " + foundCount() + " / " + PLACES.length;
   }
 
-  function showBanner(name) {
+  function showMessage(text) {
     if (!bannerEl) return;
-    bannerEl.textContent = "Discovered: " + name;
+    bannerEl.textContent = text;
     bannerEl.classList.remove("hidden");
     bannerT = 2.8;
+  }
+
+  function showBanner(name) {
+    showMessage("Discovered: " + name);
   }
 
   function checkPlaces() {
@@ -722,6 +819,7 @@
         updatePlaceCount();
         renderInventory();
         saveProgress();
+        storeAccount();
       }
     }
   }
@@ -1022,6 +1120,7 @@
     updateTreeCount();
     addItem(player, "wood", 1);
     saveProgress();
+    scheduleStore();
     music.sfx("boom");
   }
 
@@ -1829,5 +1928,6 @@
   updatePlaceCount();
   renderInventory();
   requestAnimationFrame(frame);
+  // the account copy loads in the background; the game never waits for it
   loadAccount();
 })();
