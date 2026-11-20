@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var GOAL = "Explore Mossvale and discover all 4 places: the venture capital bank, the pond, the narrow pass through the rocky ridge, and the roaring datacenter in the middle. Equip your pistol (G or the Pistol button) to blast trees out of your way. Press I or the Inventory button to see what you carry and where you have been.";
+  var GOAL = "Explore Mossvale and discover all 5 places: the venture capital bank, the pond, the narrow pass through the rocky ridge, the roaring datacenter in the middle, and Copperline Tower, the glass skyscraper in the far northeast corner past the ridge. Equip your pistol (G or the Pistol button) to blast trees out of your way. Press I or the Inventory button to see what you carry and where you have been.";
   window.gameTest = { inputsHandled: 0, goal: GOAL };
 
   var music = window.TechnoMusic || { start: function () {}, stop: function () {}, tick: function () {}, setMuted: function () {}, isMuted: function () { return true; }, sfx: function () {}, setHum: function () {} };
@@ -164,6 +164,7 @@
   var NEAR = 0.2;
   var STICK_R = 50;
   var DRAW_DIST = 52;
+  var boxRange = DRAW_DIST;
   var SHOT_RANGE = 30, GUN_Y = 1.36, SHOT_COOLDOWN = 0.3;
 
   // ---- colors ----
@@ -187,6 +188,10 @@
   var DC_UNIT = [196, 200, 204], DC_UNIT_TOP = [170, 176, 182], DC_FAN = [56, 60, 66], DC_PAD = [146, 148, 144];
   var LOT_EDGE = [150, 150, 144], ASPHALT = [72, 74, 78], LOT_LINE = [238, 238, 230];
   var NE_EDGE = [136, 130, 118], NE_GRAVEL = [160, 150, 130];
+  // Copperline Tower
+  var SKY_GLASS = [66, 128, 192], SKY_GLASS2 = [54, 112, 176], SKY_LOBBY = [40, 60, 82], SKY_LIT = [236, 222, 176];
+  var SKY_STEEL = [128, 134, 142], SKY_STEEL_TOP = [160, 166, 172], SKY_COPPER = [184, 112, 64], SKY_COPPER_TOP = [204, 134, 84];
+  var SKY_PLINTH = [150, 150, 146], SKY_PLINTH_TOP = [176, 174, 168], SKY_DOOR = [26, 36, 48];
   var TIRE = [28, 28, 32], CAR_GLASS = [44, 58, 74], CAR_BED = [52, 50, 48], CAR_TRIM = [36, 38, 44];
   var CAR_PAINTS = [[196, 52, 48], [48, 92, 170], [232, 232, 226], [42, 44, 50], [152, 156, 162], [44, 120, 86], [220, 172, 62], [118, 40, 58], [86, 148, 196], [206, 110, 44]];
   // launch facility
@@ -257,7 +262,7 @@
     [11.4, 11.75, 0.22, RK_WHITE], [11.75, 12.05, 0.1, RK_RED]
   ];
   var ventT = 0;
-  // the northeast corner, cleared and left open for the new named skyscrapers (north of the ridge)
+  // the northeast corner, cleared and graded for skyscrapers (north of the ridge)
   var NE_LOT = { x0: 17, x1: 30.6, z0: 26.4, z1: 30.6 };
   // hw, hl, wheel height, parts [lz, y0, y1, inset, hz, look]; look: 0 paint, 1 windows + painted roof, 2 truck bed, 3 trim
   var CAR_KINDS = [
@@ -532,7 +537,7 @@
 
   buildLaunchSite();
 
-  // ---- northeast corner: demolished and graded flat, left open for the new named skyscrapers ----
+  // ---- northeast corner: demolished and graded flat for skyscrapers ----
   function inNE(x, z, m) {
     return x > NE_LOT.x0 - m && x < NE_LOT.x1 + m && z > NE_LOT.z0 - m && z < NE_LOT.z1 + m;
   }
@@ -545,12 +550,19 @@
 
   clearNortheast();
 
+  // ---- Copperline Tower: the first glass-and-steel skyscraper on the northeast plot ----
+  var SKY = { x: 24, z: 28.6, hx: 1.9, hz: 1.1, h: 18, floors: 12 };
+  var SKY_R = { x0: SKY.x - SKY.hx - 0.15, x1: SKY.x + SKY.hx + 0.15, z0: SKY.z - SKY.hz - 0.15, z1: SKY.z + SKY.hz + 0.15 };
+  RECTS.push(SKY_R);
+  BLOCKERS.push(SKY_R);
+
   // ---- places to discover ----
   var PLACES = [
     { id: "vcbank", name: "The Venture Capital Bank", rect: { x0: BANK.x - BANK.hx, x1: BANK.x + BANK.hx, z0: BANK.z - BANK.hz, z1: BANK.z + BANK.hz }, r: 2.5 },
     { id: "pond", name: "The Pond", x: POND.x, z: POND.z, r: POND.r + 2.8 },
     { id: "pass", name: "The Ridge Pass", x: 12 + 5.5 * 1.6, z: 15 + 5.5 * 0.95, r: 2.4 },
-    { id: "datacenter", name: "The Datacenter", rect: DC_R, r: 2.5 }
+    { id: "datacenter", name: "The Datacenter", rect: DC_R, r: 2.5 },
+    { id: "copperline", name: "Copperline Tower", rect: SKY_R, r: 2.5 }
   ];
   var found = {};
   var bannerT = 0;
@@ -964,7 +976,7 @@
 
   function addBoxW(list, cx, cy, cz, hx, hy, hz, col, topCol, bias) {
     var dx = cx - cam.x, dy = cy - cam.y, dz = cz - cam.z;
-    if (dx * dx + dz * dz > DRAW_DIST * DRAW_DIST) return;
+    if (dx * dx + dz * dz > boxRange * boxRange) return;
     var r = Math.max(hx, hy, hz) * 1.8;
     var zc = (dx * cam.st + dz * cam.ct) * cam.cp - dy * cam.sp;
     if (zc < -r) return;
@@ -1508,6 +1520,55 @@
     addBoxW(list, b.x + 0.4, top + 1.12 + 0.38 + pulse, b.z, 0.12, 0.38 + pulse, 0.12, BANK_GOLD);
   }
 
+  // ---- Copperline Tower drawing: blue glass floors, a steel frame, a lit top floor and a copper crown ----
+  function addSkyscraper(list) {
+    var s = SKY, dx = s.x - cam.x, dz = s.z - cam.z, d2 = dx * dx + dz * dz;
+    if (d2 > 88 * 88) return;
+    var near = d2 < 34 * 34, fl = s.h / s.floors, i, k, y0, gcol;
+    var ex = s.hx - 0.02, ez = s.hz - 0.02;
+    // tall enough to show on the skyline from across the valley
+    boxRange = 90;
+    // stone plinth
+    addBoxW(list, s.x, 0.1, s.z, s.hx + 0.2, 0.1, s.hz + 0.2, SKY_PLINTH, SKY_PLINTH_TOP);
+    for (i = 0; i < s.floors; i++) {
+      y0 = i * fl;
+      if (i === 0) gcol = SKY_LOBBY;
+      else if (i === s.floors - 1) gcol = SKY_LIT;
+      else gcol = i % 2 ? SKY_GLASS2 : SKY_GLASS;
+      addBoxW(list, s.x, y0 + fl / 2, s.z, s.hx - 0.06, fl / 2, s.hz - 0.06, gcol, null, 1.03);
+      // steel floor band
+      addBoxW(list, s.x, y0 + fl, s.z, s.hx + 0.03, 0.07, s.hz + 0.03, SKY_STEEL, SKY_STEEL_TOP, 0.97);
+      if (near) {
+        // corner columns and center mullions, floor by floor
+        for (k = 0; k < 4; k++) {
+          addBoxW(list, s.x + ((k & 1) ? ex : -ex), y0 + fl / 2, s.z + ((k & 2) ? ez : -ez), 0.1, fl / 2, 0.1, SKY_STEEL, null, 0.96);
+        }
+        addBoxW(list, s.x, y0 + fl / 2, s.z - s.hz + 0.04, 0.05, fl / 2, 0.05, SKY_STEEL, null, 0.96);
+        addBoxW(list, s.x, y0 + fl / 2, s.z + s.hz - 0.04, 0.05, fl / 2, 0.05, SKY_STEEL, null, 0.96);
+      }
+    }
+    if (!near) {
+      for (k = 0; k < 4; k++) {
+        addBoxW(list, s.x + ((k & 1) ? ex : -ex), s.h / 2, s.z + ((k & 2) ? ez : -ez), 0.1, s.h / 2, 0.1, SKY_STEEL, null, 0.96);
+      }
+    } else {
+      // glass entrance doors
+      addBoxW(list, s.x, 0.6, s.z - s.hz - 0.01, 0.45, 0.6, 0.04, SKY_DOOR, null, 0.9);
+      addBoxW(list, s.x, 1.25, s.z - s.hz - 0.03, 0.6, 0.05, 0.08, SKY_COPPER, null, 0.89);
+    }
+    // copper crown, rooftop plant and a spire with a blinking light
+    addBoxW(list, s.x, s.h + 0.35, s.z, s.hx - 0.25, 0.28, s.hz - 0.2, SKY_COPPER, SKY_COPPER_TOP);
+    addBoxW(list, s.x, s.h + 0.9, s.z, s.hx - 0.8, 0.28, s.hz - 0.45, SKY_STEEL, SKY_STEEL_TOP);
+    addBoxW(list, s.x, s.h + 1.3, s.z, 0.35, 0.12, 0.35, SKY_COPPER, SKY_COPPER_TOP);
+    addBoxW(list, s.x, s.h + 2.7, s.z, 0.05, 1.3, 0.05, SKY_STEEL);
+    addBoxW(list, s.x, s.h + 4.08, s.z, 0.1, 0.1, 0.1, Math.sin(glowT * 2.6) > 0.2 ? BEACON_ON : BEACON_OFF);
+    boxRange = DRAW_DIST;
+    // the name, lit up on the top floor
+    var ty = s.h - fl / 2;
+    if (cam.z < s.z - s.hz) addTextBB(list, "COPPERLINE TOWER", s.x, ty, s.z - s.hz - 0.15, 0.32, "rgb(255,196,140)");
+    else if (cam.z > s.z + s.hz) addTextBB(list, "COPPERLINE TOWER", s.x, ty, s.z + s.hz + 0.15, 0.32, "rgb(255,196,140)");
+  }
+
   // ---- rocket launch facility drawing ----
   function addLaunchSite(list) {
     var rx = ROCKET.x, rz = ROCKET.z, i, k, s;
@@ -1725,6 +1786,7 @@
     addDatacenter(list);
     addBank(list);
     addLaunchSite(list);
+    addSkyscraper(list);
     addBoxW(list, SIGN.x, 0.7, SIGN.z, 0.08, 0.7, 0.08, WOOD);
     addBoxW(list, SIGN.x, 1.35, SIGN.z, 0.75, 0.25, 0.05, WOOD);
     addTextBB(list, "MOSSVALE", SIGN.x, 1.35, SIGN.z, 0.2, "rgb(250,240,214)");
