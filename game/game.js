@@ -150,6 +150,7 @@
   var DC_DOOR = [90, 98, 110], DC_VENT = [48, 52, 60], DC_BLADE = [150, 156, 164];
   var DC_UNIT = [196, 200, 204], DC_UNIT_TOP = [170, 176, 182], DC_FAN = [56, 60, 66], DC_PAD = [146, 148, 144];
   var LOT_EDGE = [150, 150, 144], ASPHALT = [72, 74, 78], LOT_LINE = [238, 238, 230];
+  var NE_EDGE = [136, 130, 118], NE_GRAVEL = [160, 150, 130];
   var TIRE = [28, 28, 32], CAR_GLASS = [44, 58, 74], CAR_BED = [52, 50, 48], CAR_TRIM = [36, 38, 44];
   var CAR_PAINTS = [[196, 52, 48], [48, 92, 170], [232, 232, 226], [42, 44, 50], [152, 156, 162], [44, 120, 86], [220, 172, 62], [118, 40, 58], [86, 148, 196], [206, 110, 44]];
 
@@ -194,6 +195,8 @@
   var STALL_W = 2.5, STALL_D = 4.6, STALL_X0 = -30.1, STALL_N = 7;
   // each row: [south edge z, which side opens onto a driving lane (+1 north, -1 south)]
   var LOT_ROWS = [[-30.1, 1], [-21.5, -1], [-16.9, 1]];
+  // the northeast corner, cleared and left open for the new named skyscrapers (north of the ridge)
+  var NE_LOT = { x0: 17, x1: 30.6, z0: 26.4, z1: 30.6 };
   // hw, hl, wheel height, parts [lz, y0, y1, inset, hz, look]; look: 0 paint, 1 windows + painted roof, 2 truck bed, 3 trim
   var CAR_KINDS = [
     { hw: 0.85, hl: 2.1, wh: 0.34, parts: [[0, 0.34, 0.86, 0, 2.1, 0], [-0.15, 0.86, 1.32, 0.08, 0.95, 1]] },
@@ -377,12 +380,12 @@
     if (k >= 0) arr.splice(k, 1);
   }
 
-  function buildParkingLot() {
-    var i, j, t, c, lw = 0.07;
-    // pave over whatever grew here
+  // remove trees, rocks and flowers inside an area (trees keep their saved numbers)
+  function clearArea(inside) {
+    var i, t, c;
     for (i = TREES.length - 1; i >= 0; i--) {
       t = TREES[i];
-      if (!inLot(t.x, t.z, 1.2)) continue;
+      if (!inside(t.x, t.z, 1.2)) continue;
       t.paved = true;
       TREES.splice(i, 1);
       dropFrom(CIRCS, t.circ);
@@ -390,14 +393,20 @@
     }
     for (i = ROCKS.length - 1; i >= 0; i--) {
       c = ROCKS[i];
-      if (!inLot(c.x, c.z, c.s + 0.4)) continue;
+      if (!inside(c.x, c.z, c.s + 0.4)) continue;
       ROCKS.splice(i, 1);
       dropFrom(RECTS, c.rc);
       dropFrom(BLOCKERS, c.rc);
     }
     for (i = FLOWERS.length - 1; i >= 0; i--) {
-      if (inLot(FLOWERS[i].x, FLOWERS[i].z, 0.3)) FLOWERS.splice(i, 1);
+      if (inside(FLOWERS[i].x, FLOWERS[i].z, 0.3)) FLOWERS.splice(i, 1);
     }
+  }
+
+  function buildParkingLot() {
+    var i, j, lw = 0.07;
+    // pave over whatever grew here
+    clearArea(inLot);
 
     // curb edge, asphalt, then white stall lines
     lotQuad(LOT.x0 - 0.35, LOT.z0 - 0.35, LOT.x1 + 0.35, LOT.z1 + 0.35, LOT_EDGE, 0.012, 0);
@@ -433,6 +442,19 @@
   }
 
   buildParkingLot();
+
+  // ---- northeast corner: demolished and graded flat, left open for the new named skyscrapers ----
+  function inNE(x, z, m) {
+    return x > NE_LOT.x0 - m && x < NE_LOT.x1 + m && z > NE_LOT.z0 - m && z < NE_LOT.z1 + m;
+  }
+
+  function clearNortheast() {
+    clearArea(inNE);
+    lotQuad(NE_LOT.x0 - 0.3, NE_LOT.z0 - 0.3, NE_LOT.x1 + 0.3, NE_LOT.z1 + 0.3, NE_EDGE, 0.012, 0);
+    lotQuad(NE_LOT.x0, NE_LOT.z0, NE_LOT.x1, NE_LOT.z1, NE_GRAVEL, 0.013, 0);
+  }
+
+  clearNortheast();
 
   // ---- places to discover ----
   var PLACES = [
