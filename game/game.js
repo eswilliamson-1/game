@@ -133,8 +133,9 @@
 
   // ---- colors ----
   var HAZE = [184, 206, 216];
-  var GRASS = [88, 138, 70];
-  var PATH_COL = [170, 142, 100], SHORE_COL = [198, 182, 132], WATER_COL = [64, 124, 168];
+  var GROUND_COL = [156, 156, 150];
+  var ROAD_COL = [116, 118, 122], PLAZA_COL = [178, 176, 168];
+  var SHORE_COL = [198, 182, 132], WATER_COL = [64, 124, 168];
   var TRUNK = [112, 80, 52], LEAF_A = [66, 132, 66], LEAF_A2 = [92, 156, 78], LEAF_B = [46, 104, 64];
   var ROCK_COLS = [[128, 128, 124], [112, 114, 116], [140, 134, 124]];
   var STONE = [124, 122, 116], STONE_TOP = [146, 144, 136];
@@ -173,8 +174,11 @@
   }
 
   // ---- world layout ----
+  // the old dirt path routes are gone; they're only kept so the trees stay where they always grew
   var PATH_HW = 0.9;
   var PATHS = [[0, -31, 0, 2], [0, 2, 8, 5.5], [0, 2, -6, 2.5], [-6, 2.5, -9, 6.5], [0, 2, 12, -4], [12, -4, 24, -10]];
+  // square grid of concrete roads
+  var GRID_STEP = 8, ROAD_HW = 0.9;
   var POND = { x: -15, z: 13, r: 5.6 };
   function pondR(a) { return POND.r + 0.7 * Math.sin(3 * a + 0.5) + 0.4 * Math.sin(5 * a + 1.3); }
   // the venture capital bank's lot (where the old cottage used to stand)
@@ -211,7 +215,7 @@
   var BLOCKERS = [];
   var GROUND = [], FLOWERS = [], SHADOWS = [];
   var POND_PTS = [];
-  var TREE_SHADOW_COL = [20, 40, 20], TREE_SHADOW_A = 0.22;
+  var TREE_SHADOW_COL = [26, 28, 30], TREE_SHADOW_A = 0.22;
 
   function blobPts(cx, cz, r, n, y, jit) {
     var p = [], i, a, rr;
@@ -256,9 +260,18 @@
     return true;
   }
 
+  // a concrete road ring running all the way around a building's footprint
+  function ringRoad(rc, o0, o1, y) {
+    lotQuad(rc.x0 - o1, rc.z0 - o1, rc.x1 + o1, rc.z0 - o0, ROAD_COL, y, 1);
+    lotQuad(rc.x0 - o1, rc.z1 + o0, rc.x1 + o1, rc.z1 + o1, ROAD_COL, y, 1);
+    lotQuad(rc.x0 - o1, rc.z0 - o0, rc.x0 - o0, rc.z1 + o0, ROAD_COL, y, 1);
+    lotQuad(rc.x1 + o0, rc.z0 - o0, rc.x1 + o1, rc.z1 + o0, ROAD_COL, y, 1);
+  }
+
   (function buildWorld() {
-    var i, x, z, s, h, rc;
+    var i, x, z, s, h, rc, gk, gj;
     rc = { x0: BANK.x - BANK.hx, x1: BANK.x + BANK.hx, z0: BANK.z - BANK.hz, z1: BANK.z + BANK.hz };
+    var bankRc = rc;
     RECTS.push(rc);
     BLOCKERS.push(rc);
     RECTS.push(DC_R);
@@ -319,24 +332,24 @@
       WALLS.push([WORLD.x1, c, 0.25, 0.4 + rnd() * 0.15, 2]);
     }
 
-    // meadow patches
-    for (i = 0; i < 14; i++) {
-      x = WORLD.x0 + 4 + rnd() * (WORLD.x1 - WORLD.x0 - 8);
-      z = WORLD.z0 + 4 + rnd() * (WORLD.z1 - WORLD.z0 - 8);
-      var r = 2 + rnd() * 3;
-      GROUND.push({ pts: blobPts(x, z, r, 10, 0.004, 0.5), col: i % 2 ? [104, 154, 78] : [74, 120, 60], a: 1, x: x, z: z, r: r });
+    // square grid of gray concrete roads over the whole valley (split into blocks for even fog)
+    var segs = Math.round((WORLD.x1 - WORLD.x0) / GRID_STEP);
+    for (gk = -3; gk <= 3; gk++) {
+      var gl = gk * GRID_STEP;
+      for (gj = 0; gj < segs; gj++) {
+        var a0 = WORLD.x0 + gj * GRID_STEP, a1 = a0 + GRID_STEP;
+        lotQuad(gl - ROAD_HW, a0, gl + ROAD_HW, a1, ROAD_COL, 0.005, 1);
+        lotQuad(a0, gl - ROAD_HW, a1, gl + ROAD_HW, ROAD_COL, 0.006, 1);
+      }
     }
 
-    // paths with rounded joints
-    for (i = 0; i < PATHS.length; i++) {
-      var p = PATHS[i];
-      var dx = p[2] - p[0], dz = p[3] - p[1], l = Math.sqrt(dx * dx + dz * dz) || 1;
-      var nx = -dz / l * PATH_HW, nz = dx / l * PATH_HW, y = 0.008;
-      GROUND.push({ pts: [[p[0] + nx, y, p[1] + nz], [p[2] + nx, y, p[3] + nz], [p[2] - nx, y, p[3] - nz], [p[0] - nx, y, p[1] - nz]], col: PATH_COL, a: 1, x: (p[0] + p[2]) / 2, z: (p[1] + p[3]) / 2, r: 0 });
-      GROUND.push({ pts: blobPts(p[2], p[3], PATH_HW, 10, 0.009, 0), col: PATH_COL, a: 1, x: p[2], z: p[3], r: 1 });
-    }
+    // a paved plaza and a ring road around the bank
+    lotQuad(bankRc.x0 - 0.7, bankRc.z0 - 0.7, bankRc.x1 + 0.7, bankRc.z1 + 0.7, PLAZA_COL, 0.007, 1);
+    ringRoad(bankRc, 0.7, 1.9, 0.008);
+    // a ring road around the datacenter
+    ringRoad(DC_R, 1.3, 2.5, 0.008);
 
-    // concrete pad under the datacenter (covers where the old paths met)
+    // concrete pad under the datacenter
     var pm = 1.3, py = 0.011;
     GROUND.push({ pts: [[DC_R.x0 - pm, py, DC_R.z0 - pm], [DC_R.x1 + pm, py, DC_R.z0 - pm], [DC_R.x1 + pm, py, DC_R.z1 + pm], [DC_R.x0 - pm, py, DC_R.z1 + pm]], col: DC_PAD, a: 1, x: DC.x, z: DC.z, r: 0 });
 
@@ -349,19 +362,6 @@
     }
     GROUND.push({ pts: shore, col: SHORE_COL, a: 1, x: POND.x, z: POND.z, r: 0 });
     GROUND.push({ pts: POND_PTS, col: WATER_COL, a: 1, x: POND.x, z: POND.z, r: 0 });
-
-    // little flower clusters
-    var fcols = [[240, 214, 90], [232, 140, 182], [244, 244, 236]];
-    for (i = 0; i < 40 && FLOWERS.length < 70; i++) {
-      x = WORLD.x0 + 3 + rnd() * (WORLD.x1 - WORLD.x0 - 6);
-      z = WORLD.z0 + 3 + rnd() * (WORLD.z1 - WORLD.z0 - 6);
-      if (!isClear(x, z, 0)) continue;
-      var fc = fcols[i % 3];
-      for (var k = 0; k < 7; k++) {
-        var fx = x + (rnd() - 0.5) * 2.4, fz = z + (rnd() - 0.5) * 2.4, fs = 0.09;
-        FLOWERS.push({ pts: [[fx - fs, 0.02, fz - fs], [fx + fs, 0.02, fz - fs], [fx + fs, 0.02, fz + fs], [fx - fs, 0.02, fz + fs]], col: fc, a: 1, x: fx, z: fz });
-      }
-    }
   })();
 
   var ALL_TREES = TREES.slice();
@@ -1638,9 +1638,9 @@
     ctx.fillRect(0, 0, W, H);
     var gy = Math.max(0, Math.min(H, hy));
     var gr = ctx.createLinearGradient(0, gy, 0, H);
-    gr.addColorStop(0, "rgb(170,196,190)");
-    gr.addColorStop(0.12, "rgb(116,158,100)");
-    gr.addColorStop(1, "rgb(" + GRASS[0] + "," + GRASS[1] + "," + GRASS[2] + ")");
+    gr.addColorStop(0, "rgb(176,192,198)");
+    gr.addColorStop(0.12, "rgb(162,166,164)");
+    gr.addColorStop(1, "rgb(" + GROUND_COL[0] + "," + GROUND_COL[1] + "," + GROUND_COL[2] + ")");
     ctx.fillStyle = gr;
     ctx.fillRect(0, gy, W, H - gy);
 
