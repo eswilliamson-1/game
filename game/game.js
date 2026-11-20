@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var GOAL = "Explore Mossvale and discover all 4 places: the old cottage, the pond, the narrow pass through the rocky ridge, and the roaring datacenter in the middle. Equip your pistol (G or the Pistol button) to blast trees out of your way. Press I or the Inventory button to see what you carry and where you have been.";
+  var GOAL = "Explore Mossvale and discover all 4 places: the venture capital bank, the pond, the narrow pass through the rocky ridge, and the roaring datacenter in the middle. Equip your pistol (G or the Pistol button) to blast trees out of your way. Press I or the Inventory button to see what you carry and where you have been.";
   window.gameTest = { inputsHandled: 0, goal: GOAL };
 
   var music = window.TechnoMusic || { start: function () {}, stop: function () {}, tick: function () {}, setMuted: function () {}, isMuted: function () { return true; }, sfx: function () {}, setHum: function () {} };
@@ -138,7 +138,9 @@
   var TRUNK = [112, 80, 52], LEAF_A = [66, 132, 66], LEAF_A2 = [92, 156, 78], LEAF_B = [46, 104, 64];
   var ROCK_COLS = [[128, 128, 124], [112, 114, 116], [140, 134, 124]];
   var STONE = [124, 122, 116], STONE_TOP = [146, 144, 136];
-  var HUT_WALL = [200, 174, 132], HUT_ROOF = [152, 72, 58], HUT_DOOR = [92, 62, 40], HUT_WIN = [130, 178, 205];
+  var BANK_STONE = [226, 220, 204], BANK_STONE2 = [198, 192, 178], BANK_ROOF = [178, 172, 160];
+  var BANK_COL = [238, 234, 222], BANK_DOOR = [74, 60, 40], BANK_WIN = [66, 92, 118];
+  var BANK_GOLD = [226, 186, 70], BANK_PLATE = [32, 62, 50];
   var WOOD = [134, 98, 62];
   var AV_BODY = [150, 122, 215], AV_HEAD = [226, 222, 210], AV_DARK = [34, 38, 50];
   var AV_EYE = [120, 230, 255], AV_LEG = [84, 90, 108], AV_GOLD = [255, 212, 70];
@@ -174,7 +176,8 @@
   var PATHS = [[0, -31, 0, 2], [0, 2, 8, 5.5], [0, 2, -6, 2.5], [-6, 2.5, -9, 6.5], [0, 2, 12, -4], [12, -4, 24, -10]];
   var POND = { x: -15, z: 13, r: 5.6 };
   function pondR(a) { return POND.r + 0.7 * Math.sin(3 * a + 0.5) + 0.4 * Math.sin(5 * a + 1.3); }
-  var HUT = { x: 8, z: 9, hx: 2.4, hz: 2, h: 1.7 };
+  // the venture capital bank's lot (where the old cottage used to stand)
+  var BANK = { x: 8, z: 9, hx: 2.4, hz: 2, h: 2.6 };
   var SIGN = { x: 1.8, z: -4 };
 
   // the datacenter: a big, noisy block right in the middle of the valley
@@ -226,7 +229,7 @@
     }
     dx = x - POND.x; dz = z - POND.z;
     if (Math.sqrt(dx * dx + dz * dz) < POND.r + 1.8 + m) return false;
-    if (x > HUT.x - HUT.hx - m - 1 && x < HUT.x + HUT.hx + m + 1 && z > HUT.z - HUT.hz - m - 1.5 && z < HUT.z + HUT.hz + m + 1) return false;
+    if (x > BANK.x - BANK.hx - m - 1 && x < BANK.x + BANK.hx + m + 1 && z > BANK.z - BANK.hz - m - 1.5 && z < BANK.z + BANK.hz + m + 1) return false;
     // keep a walkable lane all the way around the datacenter
     if (x > DC_R.x0 - m - 1.5 && x < DC_R.x1 + m + 1.5 && z > DC_R.z0 - m - 1.5 && z < DC_R.z1 + m + 1.5) return false;
     dx = x - SIGN.x; dz = z - SIGN.z;
@@ -252,7 +255,7 @@
 
   (function buildWorld() {
     var i, x, z, s, h, rc;
-    rc = { x0: HUT.x - HUT.hx, x1: HUT.x + HUT.hx, z0: HUT.z - HUT.hz, z1: HUT.z + HUT.hz };
+    rc = { x0: BANK.x - BANK.hx, x1: BANK.x + BANK.hx, z0: BANK.z - BANK.hz, z1: BANK.z + BANK.hz };
     RECTS.push(rc);
     BLOCKERS.push(rc);
     RECTS.push(DC_R);
@@ -433,7 +436,7 @@
 
   // ---- places to discover ----
   var PLACES = [
-    { id: "cottage", name: "The Old Cottage", rect: { x0: HUT.x - HUT.hx, x1: HUT.x + HUT.hx, z0: HUT.z - HUT.hz, z1: HUT.z + HUT.hz }, r: 2.5 },
+    { id: "vcbank", name: "The Venture Capital Bank", rect: { x0: BANK.x - BANK.hx, x1: BANK.x + BANK.hx, z0: BANK.z - BANK.hz, z1: BANK.z + BANK.hz }, r: 2.5 },
     { id: "pond", name: "The Pond", x: POND.x, z: POND.z, r: POND.r + 2.8 },
     { id: "pass", name: "The Ridge Pass", x: 12 + 5.5 * 1.6, z: 15 + 5.5 * 0.95, r: 2.4 },
     { id: "datacenter", name: "The Datacenter", rect: DC_R, r: 2.5 }
@@ -615,6 +618,7 @@
         if (removeTree(ALL_TREES[id])) any = true;
       }
     }
+    // the old cottage is gone, so a saved "cottage" discovery simply no longer matches anything
     if (Array.isArray(d.places)) {
       for (i = 0; i < d.places.length && i < 20; i++) {
         var pid = d.places[i];
@@ -1267,16 +1271,50 @@
     }
   }
 
-  function addHut(list) {
-    var h = HUT, fz = h.z - h.hz;
-    addBoxW(list, h.x, h.h / 2, h.z, h.hx, h.h / 2, h.hz, HUT_WALL, HUT_WALL);
-    addBoxW(list, h.x, h.h + 0.22, h.z, h.hx + 0.35, 0.22, h.hz + 0.35, HUT_ROOF);
-    addBoxW(list, h.x, h.h + 0.66, h.z, h.hx - 0.1, 0.22, h.hz - 0.45, HUT_ROOF);
-    addBoxW(list, h.x, h.h + 1.06, h.z, h.hx - 0.55, 0.18, h.hz - 1.05, HUT_ROOF);
-    addBoxW(list, h.x + 1.3, h.h + 1.1, h.z + 0.8, 0.24, 0.6, 0.24, STONE, STONE_TOP);
-    addBoxW(list, h.x, 0.62, fz - 0.04, 0.45, 0.62, 0.04, HUT_DOOR, null, 0.85);
-    addBoxW(list, h.x - 1.45, 1.0, fz - 0.03, 0.35, 0.28, 0.03, HUT_WIN, null, 0.85);
-    addBoxW(list, h.x + 1.45, 1.0, fz - 0.03, 0.35, 0.28, 0.03, HUT_WIN, null, 0.85);
+  // the venture capital bank: a stately stone hall with columns, a portico and a gold growth chart on the roof
+  function addBank(list) {
+    var b = BANK, fz = b.z - b.hz, top = b.h, base = 0.25;
+    var wz0 = fz + 0.7, wz1 = b.z + b.hz - 0.1;
+    var wallHy = (top - base) / 2, wallY = base + wallHy;
+    var dx = b.x - cam.x, dz = b.z - cam.z;
+    if (dx * dx + dz * dz > DRAW_DIST * DRAW_DIST) return;
+    // plinth and front steps
+    addBoxW(list, b.x, base / 2, b.z, b.hx, base / 2, b.hz, BANK_STONE2, BANK_STONE);
+    addBoxW(list, b.x, 0.08, fz - 0.22, b.hx - 0.5, 0.08, 0.22, BANK_STONE2, BANK_STONE, 0.95);
+    // main hall, set back behind the portico
+    addBoxW(list, b.x, wallY, (wz0 + wz1) / 2, b.hx - 0.15, wallHy, (wz1 - wz0) / 2, BANK_STONE);
+    // heavy bronze doors and tall windows on the front wall
+    addBoxW(list, b.x, base + 0.75, wz0 - 0.04, 0.42, 0.75, 0.04, BANK_DOOR, null, 0.85);
+    addBoxW(list, b.x, base + 1.53, wz0 - 0.05, 0.48, 0.04, 0.05, BANK_GOLD, null, 0.84);
+    addBoxW(list, b.x - 1.35, base + 1.15, wz0 - 0.03, 0.24, 0.6, 0.03, BANK_WIN, null, 0.85);
+    addBoxW(list, b.x + 1.35, base + 1.15, wz0 - 0.03, 0.24, 0.6, 0.03, BANK_WIN, null, 0.85);
+    // side windows
+    for (var k = -1; k <= 1; k += 2) {
+      var sx = b.x + k * (b.hx - 0.15) + k * 0.03;
+      addBoxW(list, sx, base + 1.15, b.z + 0.1, 0.03, 0.6, 0.28, BANK_WIN, null, 0.85);
+      addBoxW(list, sx, base + 1.15, b.z + 1.1, 0.03, 0.6, 0.28, BANK_WIN, null, 0.85);
+    }
+    // portico columns with bases and capitals
+    var cols = [-1.95, -0.75, 0.75, 1.95], cz = fz + 0.3;
+    for (var i = 0; i < cols.length; i++) {
+      var cx = b.x + cols[i];
+      addBoxW(list, cx, wallY, cz, 0.16, wallHy, 0.16, BANK_COL, null, 0.95);
+      addBoxW(list, cx, base + 0.08, cz, 0.24, 0.08, 0.24, BANK_STONE2, null, 0.94);
+      addBoxW(list, cx, top - 0.08, cz, 0.24, 0.08, 0.24, BANK_STONE2, null, 0.94);
+    }
+    // entablature with the name plate
+    addBoxW(list, b.x, top + 0.2, b.z, b.hx + 0.1, 0.2, b.hz + 0.1, BANK_STONE2, BANK_STONE);
+    addBoxW(list, b.x, top + 0.2, fz - 0.12, b.hx - 0.3, 0.14, 0.03, BANK_PLATE, null, 0.85);
+    addTextBB(list, "VENTURE CAPITAL BANK", b.x, top + 0.2, fz - 0.17, 0.17, "rgb(240,206,110)");
+    // stepped pediment roof
+    addBoxW(list, b.x, top + 0.55, b.z, b.hx - 0.15, 0.15, b.hz, BANK_ROOF);
+    addBoxW(list, b.x, top + 0.82, b.z, b.hx - 0.85, 0.12, b.hz - 0.2, BANK_ROOF);
+    addBoxW(list, b.x, top + 1.03, b.z, b.hx - 1.55, 0.09, b.hz - 0.4, BANK_ROOF);
+    // gold growth chart on the roof (always going up)
+    var pulse = 0.04 * Math.sin(glowT * 2);
+    addBoxW(list, b.x - 0.4, top + 1.12 + 0.12, b.z, 0.12, 0.12, 0.12, BANK_GOLD);
+    addBoxW(list, b.x, top + 1.12 + 0.24, b.z, 0.12, 0.24, 0.12, BANK_GOLD);
+    addBoxW(list, b.x + 0.4, top + 1.12 + 0.38 + pulse, b.z, 0.12, 0.38 + pulse, 0.12, BANK_GOLD);
   }
 
   // ---- datacenter drawing ----
@@ -1419,7 +1457,7 @@
       addBoxW(list, c[0], c[3], c[1], c[2], c[3], c[4], STONE, STONE_TOP);
     }
     addDatacenter(list);
-    addHut(list);
+    addBank(list);
     addBoxW(list, SIGN.x, 0.7, SIGN.z, 0.08, 0.7, 0.08, WOOD);
     addBoxW(list, SIGN.x, 1.35, SIGN.z, 0.75, 0.25, 0.05, WOOD);
     addTextBB(list, "MOSSVALE", SIGN.x, 1.35, SIGN.z, 0.2, "rgb(250,240,214)");
