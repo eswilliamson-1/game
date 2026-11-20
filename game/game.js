@@ -189,6 +189,14 @@
   var NE_EDGE = [136, 130, 118], NE_GRAVEL = [160, 150, 130];
   var TIRE = [28, 28, 32], CAR_GLASS = [44, 58, 74], CAR_BED = [52, 50, 48], CAR_TRIM = [36, 38, 44];
   var CAR_PAINTS = [[196, 52, 48], [48, 92, 170], [232, 232, 226], [42, 44, 50], [152, 156, 162], [44, 120, 86], [220, 172, 62], [118, 40, 58], [86, 148, 196], [206, 110, 44]];
+  // launch facility
+  var RK_WHITE = [238, 238, 234], RK_RED = [196, 56, 44], RK_DARK = [42, 44, 50], RK_STEEL = [118, 122, 128], RK_STEEL_TOP = [150, 152, 156];
+  var RK_WINDOW = [60, 110, 170];
+  var TOWER_RED = [190, 74, 48], TOWER_GRAY = [96, 100, 108];
+  var PAD_COL = [192, 190, 182], PAD_EDGE = [214, 178, 52], SCORCH_COL = [62, 58, 54], TRENCH_COL = [40, 38, 36];
+  var BUNKER_COL = [152, 150, 142], BUNKER_TOP = [170, 168, 160], BUNKER_GLASS = [40, 60, 80];
+  var TANK_WHITE = [224, 226, 228], TANK_BAND = [56, 96, 160];
+  var BEACON_ON = [255, 64, 50], BEACON_OFF = [96, 34, 30];
 
   // ---- deterministic random so the world is always the same ----
   var seed = 20240611;
@@ -234,6 +242,21 @@
   var STALL_W = 2.5, STALL_D = 4.6, STALL_X0 = -30.1, STALL_N = 7;
   // each row: [south edge z, which side opens onto a driving lane (+1 north, -1 south)]
   var LOT_ROWS = [[-30.1, 1], [-21.5, -1], [-16.9, 1]];
+  // the rocket launch facility, built over the far southwest end of the parking lot
+  var LAUNCH = { x0: -30.4, x1: -17.9, z0: -30.4, z1: -22.4 };
+  var ROCKET = { x: -25.6, z: -26.6 };
+  var TOWER = { x: -28.2, z: -26.6, h: 12.6 };
+  var BUNKER = { x: -20.4, z: -28.6, hx: 1.5, hz: 1.0, h: 1.3 };
+  var TANKS = [[-22.6, -23.5], [-20.9, -23.5]];
+  var LSIGN = { x: -18.7, z: -25.0 };
+  // rocket body, bottom to top: [y0, y1, half width, color]
+  var ROCKET_SEGS = [
+    [1.14, 1.7, 0.78, RK_DARK], [1.7, 2.2, 0.75, RK_WHITE], [2.2, 2.5, 0.75, RK_RED], [2.5, 5.6, 0.75, RK_WHITE],
+    [5.6, 5.9, 0.75, RK_RED], [5.9, 6.6, 0.75, RK_WHITE], [6.6, 7.1, 0.7, RK_DARK], [7.1, 9.4, 0.62, RK_WHITE],
+    [9.4, 9.6, 0.62, RK_RED], [9.6, 10.4, 0.6, RK_WHITE], [10.4, 10.95, 0.48, RK_WHITE], [10.95, 11.4, 0.35, RK_WHITE],
+    [11.4, 11.75, 0.22, RK_WHITE], [11.75, 12.05, 0.1, RK_RED]
+  ];
+  var ventT = 0;
   // the northeast corner, cleared and left open for the new named skyscrapers (north of the ridge)
   var NE_LOT = { x0: 17, x1: 30.6, z0: 26.4, z1: 30.6 };
   // hw, hl, wheel height, parts [lz, y0, y1, inset, hz, look]; look: 0 paint, 1 windows + painted roof, 2 truck bed, 3 trim
@@ -406,6 +429,10 @@
     return x > LOT.x0 - m && x < LOT.x1 + m && z > LOT.z0 - m && z < LOT.z1 + m;
   }
 
+  function inLaunch(x, z, m) {
+    return x > LAUNCH.x0 - m && x < LAUNCH.x1 + m && z > LAUNCH.z0 - m && z < LAUNCH.z1 + m;
+  }
+
   function lotQuad(x0, z0, x1, z1, col, y, r) {
     GROUND.push({ pts: [[x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1]], col: col, a: 1, x: (x0 + x1) / 2, z: (z0 + z1) / 2, r: r });
   }
@@ -457,7 +484,7 @@
       lotQuad(STALL_X0 - lw, bz - lw, xEnd + lw, bz + lw, LOT_LINE, 0.015, 1);
     }
 
-    // parked vehicles
+    // parked vehicles (none where the launch facility now stands)
     var n = 0;
     for (j = 0; j < LOT_ROWS.length; j++) {
       var z0 = LOT_ROWS[j][0], op = LOT_ROWS[j][1];
@@ -469,6 +496,7 @@
         var cz = z0 + STALL_D / 2 + op * Math.max(0, K.hl - 2.15);
         var car = { x: cx, z: cz, k: K, dir: rnd() < 0.75 ? -op : op, col: CAR_PAINTS[Math.floor(rnd() * CAR_PAINTS.length) % CAR_PAINTS.length] };
         car.rc = { x0: cx - K.hw - 0.03, x1: cx + K.hw + 0.03, z0: cz - K.hl, z1: cz + K.hl };
+        if (car.rc.x0 < LAUNCH.x1 && car.rc.x1 > LAUNCH.x0 && car.rc.z0 < LAUNCH.z1 && car.rc.z1 > LAUNCH.z0) continue;
         CARS.push(car);
         RECTS.push(car.rc);
         BLOCKERS.push(car.rc);
@@ -477,6 +505,32 @@
   }
 
   buildParkingLot();
+
+  // ---- rocket launch facility: concrete pad, launch mount, service tower, control bunker, fuel tanks ----
+  function solid(x0, z0, x1, z1) {
+    var rc = { x0: x0, x1: x1, z0: z0, z1: z1 };
+    RECTS.push(rc);
+    BLOCKERS.push(rc);
+  }
+
+  function buildLaunchSite() {
+    var i, rx = ROCKET.x, rz = ROCKET.z;
+    clearArea(inLaunch);
+    // yellow safety border, then the pad itself (drawn over the old parking stalls)
+    lotQuad(LAUNCH.x0 - 0.25, LAUNCH.z0 - 0.25, LAUNCH.x1 + 0.25, LAUNCH.z1 + 0.25, PAD_EDGE, 0.017, 0);
+    lotQuad(LAUNCH.x0, LAUNCH.z0, LAUNCH.x1, LAUNCH.z1, PAD_COL, 0.018, 0);
+    // soot around the mount and the flame trench running east
+    GROUND.push({ pts: [[rx - 2.4, 0.019, rz - 2.4], [rx + 2.4, 0.019, rz - 2.4], [rx + 2.4, 0.019, rz + 2.4], [rx - 2.4, 0.019, rz + 2.4]], col: SCORCH_COL, a: 0.45, x: rx, z: rz, r: 0 });
+    lotQuad(rx + 1.6, rz - 0.7, rx + 4.2, rz + 0.7, TRENCH_COL, 0.02, 0);
+    // things you can't walk through (and that stop pistol shots)
+    solid(rx - 1.6, rz - 1.6, rx + 1.6, rz + 1.6);
+    solid(TOWER.x - 0.7, TOWER.z - 0.7, TOWER.x + 0.7, TOWER.z + 0.7);
+    solid(BUNKER.x - BUNKER.hx, BUNKER.z - BUNKER.hz, BUNKER.x + BUNKER.hx, BUNKER.z + BUNKER.hz);
+    for (i = 0; i < TANKS.length; i++) solid(TANKS[i][0] - 0.6, TANKS[i][1] - 0.6, TANKS[i][0] + 0.6, TANKS[i][1] + 0.6);
+    CIRCS.push({ x: LSIGN.x, z: LSIGN.z, r: 0.2 });
+  }
+
+  buildLaunchSite();
 
   // ---- northeast corner: demolished and graded flat, left open for the new named skyscrapers ----
   function inNE(x, z, m) {
@@ -1237,6 +1291,21 @@
     }
   }
 
+  // the fueled rocket vents a little cold vapor now and then
+  function updateLaunchSite(dt) {
+    ventT -= dt;
+    if (ventT > 0) return;
+    ventT = 0.5;
+    var dx = ROCKET.x - player.x, dz = ROCKET.z - player.z;
+    if (dx * dx + dz * dz > 46 * 46) return;
+    var side = Math.random() < 0.5 ? -1 : 1;
+    if (Math.random() < 0.7) {
+      FX.push({ x: ROCKET.x + side * (0.9 + Math.random() * 0.4), y: 1.0, z: ROCKET.z + (Math.random() - 0.5) * 1.2, t: 0, dur: 1.8, r0: 0.3, r1: 1.1, kind: 4 });
+    } else {
+      FX.push({ x: ROCKET.x + side * 0.75, y: 6.85, z: ROCKET.z, t: 0, dur: 1.6, r0: 0.2, r1: 0.8, kind: 4 });
+    }
+  }
+
   function updateEffects(dt) {
     var i;
     if (gunCool > 0) gunCool -= dt;
@@ -1277,6 +1346,7 @@
     }
     updateEffects(dt);
     updateDatacenter(dt);
+    updateLaunchSite(dt);
     if (gunOn) castAim();
   }
 
@@ -1438,6 +1508,81 @@
     addBoxW(list, b.x + 0.4, top + 1.12 + 0.38 + pulse, b.z, 0.12, 0.38 + pulse, 0.12, BANK_GOLD);
   }
 
+  // ---- rocket launch facility drawing ----
+  function addLaunchSite(list) {
+    var rx = ROCKET.x, rz = ROCKET.z, i, k, s;
+    var dx = rx - cam.x, dz = rz - cam.z;
+    if (dx * dx + dz * dz > (DRAW_DIST + 10) * (DRAW_DIST + 10)) return;
+
+    // launch mount, hold-down clamps and engine bells
+    addBoxW(list, rx, 0.35, rz, 1.6, 0.35, 1.6, RK_STEEL, RK_STEEL_TOP);
+    for (k = 0; k < 4; k++) {
+      var sx = (k & 1) ? 1 : -1, sz = (k & 2) ? 1 : -1;
+      addBoxW(list, rx + sx * 0.98, 0.95, rz + sz * 0.98, 0.12, 0.25, 0.12, RK_DARK);
+      addBoxW(list, rx + sx * 0.35, 0.92, rz + sz * 0.35, 0.22, 0.22, 0.22, RK_DARK);
+    }
+
+    // the rocket body, stacked from the base up to the nose cone
+    for (i = 0; i < ROCKET_SEGS.length; i++) {
+      s = ROCKET_SEGS[i];
+      addBoxW(list, rx, (s[0] + s[1]) / 2, rz, s[2], (s[1] - s[0]) / 2, s[2], s[3]);
+    }
+    // fins and a round window on the upper stage
+    addBoxW(list, rx - 1.05, 1.72, rz, 0.3, 0.58, 0.05, RK_RED);
+    addBoxW(list, rx + 1.05, 1.72, rz, 0.3, 0.58, 0.05, RK_RED);
+    addBoxW(list, rx, 1.72, rz - 1.05, 0.05, 0.58, 0.3, RK_RED);
+    addBoxW(list, rx, 1.72, rz + 1.05, 0.05, 0.58, 0.3, RK_RED);
+    addBoxW(list, rx, 8.3, rz - 0.64, 0.22, 0.22, 0.02, RK_WINDOW, null, 0.9);
+    addBoxW(list, rx + 0.64, 8.3, rz, 0.02, 0.22, 0.22, RK_WINDOW, null, 0.9);
+
+    // service tower: posts, cross beams, swing arms, lightning mast and beacon
+    var tx = TOWER.x, tz = TOWER.z, th = TOWER.h, seg = th / 3, lv = th / 6;
+    addBoxW(list, tx, 0.1, tz, 0.75, 0.1, 0.75, RK_STEEL, RK_STEEL_TOP);
+    for (k = 0; k < 4; k++) {
+      var px = tx + ((k & 1) ? 0.55 : -0.55), pz = tz + ((k & 2) ? 0.55 : -0.55);
+      for (i = 0; i < 3; i++) addBoxW(list, px, seg * (i + 0.5), pz, 0.07, seg / 2, 0.07, TOWER_RED);
+    }
+    for (i = 1; i <= 6; i++) {
+      var y = i * lv - 0.06;
+      addBoxW(list, tx, y, tz - 0.55, 0.55, 0.05, 0.05, TOWER_GRAY);
+      addBoxW(list, tx, y, tz + 0.55, 0.55, 0.05, 0.05, TOWER_GRAY);
+      addBoxW(list, tx - 0.55, y, tz, 0.05, 0.05, 0.55, TOWER_GRAY);
+      addBoxW(list, tx + 0.55, y, tz, 0.05, 0.05, 0.55, TOWER_GRAY);
+    }
+    addBoxW(list, tx, th + 0.05, tz, 0.7, 0.05, 0.7, TOWER_GRAY);
+    var armX0 = tx + 0.62, armX1 = rx - 0.62;
+    addBoxW(list, (armX0 + armX1) / 2, 7.4, rz, (armX1 - armX0) / 2, 0.08, 0.15, TOWER_GRAY);
+    addBoxW(list, (armX0 + armX1) / 2, 10.1, rz, (armX1 - armX0) / 2 + 0.02, 0.08, 0.15, TOWER_GRAY);
+    addBoxW(list, tx, th + 0.7, tz, 0.04, 0.6, 0.04, RK_DARK);
+    addBoxW(list, tx, th + 1.38, tz, 0.09, 0.09, 0.09, Math.sin(glowT * 3) > 0.3 ? BEACON_ON : BEACON_OFF);
+
+    // control bunker with a slit window facing the pad and a slowly turning tracking dish
+    var b = BUNKER;
+    addBoxW(list, b.x, b.h / 2, b.z, b.hx, b.h / 2, b.hz, BUNKER_COL, BUNKER_TOP);
+    addBoxW(list, b.x - b.hx - 0.02, 0.85, b.z, 0.02, 0.14, 0.7, BUNKER_GLASS, null, 0.88);
+    addBoxW(list, b.x + 0.6, 0.55, b.z + b.hz + 0.02, 0.3, 0.55, 0.02, DC_DOOR, null, 0.88);
+    addBoxW(list, b.x + 0.8, b.h + 0.45, b.z - 0.3, 0.03, 0.45, 0.03, RK_DARK);
+    var dy = glowT * 0.3;
+    var dg = { px: b.x + 0.8, pz: b.z - 0.3, c: Math.cos(dy), s: Math.sin(dy), oy: 0 };
+    botBox(list, dg, 0, b.h + 1.0, 0, 0.36, 0.36, 0.03, TANK_WHITE, 0, b.h + 1.0, 0, 0.6);
+
+    // fuel tanks and the feed line running to the launch mount
+    for (i = 0; i < TANKS.length; i++) {
+      var t = TANKS[i];
+      addBoxW(list, t[0], 0.45, t[1], 0.6, 0.45, 0.6, TANK_WHITE);
+      addBoxW(list, t[0], 1.05, t[1], 0.6, 0.15, 0.6, TANK_BAND);
+      addBoxW(list, t[0], 1.7, t[1], 0.6, 0.5, 0.6, TANK_WHITE);
+      addBoxW(list, t[0], 2.3, t[1], 0.4, 0.1, 0.4, TANK_WHITE);
+    }
+    addBoxW(list, (rx + TANKS[1][0]) / 2, 0.12, -24.15, (TANKS[1][0] - rx) / 2, 0.12, 0.1, RK_STEEL);
+    addBoxW(list, rx, 0.12, -24.575, 0.1, 0.12, 0.425, RK_STEEL);
+
+    // name board
+    addBoxW(list, LSIGN.x, 0.7, LSIGN.z, 0.08, 0.7, 0.08, TOWER_GRAY);
+    addBoxW(list, LSIGN.x, 1.4, LSIGN.z, 0.05, 0.28, 0.85, RK_WHITE);
+    addTextBB(list, "LAUNCH SITE", LSIGN.x, 1.4, LSIGN.z, 0.2, "rgb(255,120,90)");
+  }
+
   // ---- datacenter drawing ----
   // side: 0 south, 1 north, 2 west, 3 east; u runs along the wall, out away from it
   function dcPos(side, u, out) {
@@ -1579,6 +1724,7 @@
     }
     addDatacenter(list);
     addBank(list);
+    addLaunchSite(list);
     addBoxW(list, SIGN.x, 0.7, SIGN.z, 0.08, 0.7, 0.08, WOOD);
     addBoxW(list, SIGN.x, 1.35, SIGN.z, 0.75, 0.25, 0.05, WOOD);
     addTextBB(list, "MOSSVALE", SIGN.x, 1.35, SIGN.z, 0.2, "rgb(250,240,214)");
