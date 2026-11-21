@@ -249,13 +249,13 @@
   var STALL_W = 2.5, STALL_D = 4.6, STALL_X0 = -30.1, STALL_N = 7;
   // each row: [south edge z, which side opens onto a driving lane (+1 north, -1 south)]
   var LOT_ROWS = [[-30.1, 1], [-21.5, -1], [-16.9, 1]];
-  // the rocket launch facility, built over the far southwest end of the parking lot
-  var LAUNCH = { x0: -30.4, x1: -17.9, z0: -30.4, z1: -22.4 };
-  var ROCKET = { x: -25.6, z: -26.6 };
-  var TOWER = { x: -28.2, z: -26.6, h: 12.6 };
-  var BUNKER = { x: -20.4, z: -28.6, hx: 1.5, hz: 1.0, h: 1.3 };
-  var TANKS = [[-22.6, -23.5], [-20.9, -23.5]];
-  var LSIGN = { x: -18.7, z: -25.0 };
+  // the rocket launch facility, in the southeast corner (twice the pad area it used to have)
+  var LAUNCH = { x0: 12.8, x1: 30.4, z0: -30.4, z1: -19.0 };
+  var ROCKET = { x: 19.6, z: -24.7 };
+  var TOWER = { x: 17.0, z: -24.7, h: 12.6 };
+  var BUNKER = { x: 27.0, z: -28.2, hx: 1.5, hz: 1.0, h: 1.3 };
+  var TANKS = [[24.2, -21.0], [25.9, -21.0], [27.6, -21.0]];
+  var LSIGN = { x: 13.7, z: -20.4 };
   // rocket body, bottom to top: [y0, y1, half width, color]
   var ROCKET_SEGS = [
     [1.14, 1.7, 0.78, RK_DARK], [1.7, 2.2, 0.75, RK_WHITE], [2.2, 2.5, 0.75, RK_RED], [2.5, 5.6, 0.75, RK_WHITE],
@@ -491,7 +491,7 @@
       lotQuad(STALL_X0 - lw, bz - lw, xEnd + lw, bz + lw, LOT_LINE, 0.015, 1);
     }
 
-    // parked vehicles (none where the launch facility now stands)
+    // parked vehicles (the whole lot is parking again now that the launch site has moved)
     var n = 0;
     for (j = 0; j < LOT_ROWS.length; j++) {
       var z0 = LOT_ROWS[j][0], op = LOT_ROWS[j][1];
@@ -503,7 +503,6 @@
         var cz = z0 + STALL_D / 2 + op * Math.max(0, K.hl - 2.15);
         var car = { x: cx, z: cz, k: K, dir: rnd() < 0.75 ? -op : op, col: CAR_PAINTS[Math.floor(rnd() * CAR_PAINTS.length) % CAR_PAINTS.length] };
         car.rc = { x0: cx - K.hw - 0.03, x1: cx + K.hw + 0.03, z0: cz - K.hl, z1: cz + K.hl };
-        if (car.rc.x0 < LAUNCH.x1 && car.rc.x1 > LAUNCH.x0 && car.rc.z0 < LAUNCH.z1 && car.rc.z1 > LAUNCH.z0) continue;
         CARS.push(car);
         RECTS.push(car.rc);
         BLOCKERS.push(car.rc);
@@ -523,7 +522,7 @@
   function buildLaunchSite() {
     var i, rx = ROCKET.x, rz = ROCKET.z;
     clearArea(inLaunch);
-    // yellow safety border, then the pad itself (drawn over the old parking stalls)
+    // yellow safety border, then the pad itself
     lotQuad(LAUNCH.x0 - 0.25, LAUNCH.z0 - 0.25, LAUNCH.x1 + 0.25, LAUNCH.z1 + 0.25, PAD_EDGE, 0.017, 0);
     lotQuad(LAUNCH.x0, LAUNCH.z0, LAUNCH.x1, LAUNCH.z1, PAD_COL, 0.018, 0);
     // soot around the mount and the flame trench running east
@@ -1654,8 +1653,9 @@
       addBoxW(list, t[0], 1.7, t[1], 0.6, 0.5, 0.6, TANK_WHITE);
       addBoxW(list, t[0], 2.3, t[1], 0.4, 0.1, 0.4, TANK_WHITE);
     }
-    addBoxW(list, (rx + TANKS[1][0]) / 2, 0.12, -24.15, (TANKS[1][0] - rx) / 2, 0.12, 0.1, RK_STEEL);
-    addBoxW(list, rx, 0.12, -24.575, 0.1, 0.12, 0.425, RK_STEEL);
+    var lineZ = TANKS[0][1] - 0.65, lastX = TANKS[TANKS.length - 1][0], mountZ = rz + 1.6;
+    addBoxW(list, (rx + lastX) / 2, 0.12, lineZ, (lastX - rx) / 2, 0.12, 0.1, RK_STEEL);
+    addBoxW(list, rx, 0.12, (lineZ + mountZ) / 2, 0.1, 0.12, (lineZ - mountZ) / 2, RK_STEEL);
 
     // name board
     addBoxW(list, LSIGN.x, 0.7, LSIGN.z, 0.08, 0.7, 0.08, TOWER_GRAY);
