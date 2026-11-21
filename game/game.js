@@ -161,6 +161,8 @@
   var MOUSE_TURN = 0.0026, MOUSE_MAX_STEP = 250;
   var CAM_BACK = 5.5, CAM_UP = 4.2, LOOK_AHEAD = 4, LOOK_Y = 0.5;
   var CAM_PITCH = Math.atan2(CAM_UP - LOOK_Y, CAM_BACK + LOOK_AHEAD);
+  // vertical look: an offset added to the resting tilt, limited so the view never flips over
+  var PITCH_MIN = -1.25, PITCH_MAX = 0.9, TILT_SPEED = 1.4;
   var NEAR = 0.2;
   var STICK_R = 50;
   var DRAW_DIST = 52;
@@ -586,12 +588,18 @@
 
   var player = { x: START_X, z: START_Z, yaw: 0, walk: 0, walkAmt: 0, inventory: [] };
   var camYaw = 0;
-  var cam = { x: 0, y: 0, z: 0, ct: 1, st: 0, cp: 1, sp: 0, f: 300, cx: 150, cy: 200 };
+  var lookPitch = 0;
+  var cam = { x: 0, y: 0, z: 0, ct: 1, st: 0, cp: 1, sp: 0, f: 300, cx: 150, cy: 200, pitch: CAM_PITCH };
   var keys = {};
   var stick = null, stickId = null, lookers = {};
   var locked = false;
   var state = "ready";
   var glowT = 0;
+
+  function clampPitch(p) {
+    if (!isFinite(p)) return 0;
+    return Math.max(PITCH_MIN, Math.min(PITCH_MAX, p));
+  }
 
   // ---- pistol state ----
   var gunOn = false, gunCool = 0, gunKick = 0, shake = 0, cleared = 0;
@@ -909,11 +917,14 @@
   // ---- camera + projection ----
   function setupCamera() {
     var s = Math.sin(camYaw), c = Math.cos(camYaw);
+    var pitch = CAM_PITCH + lookPitch;
     cam.x = player.x - s * CAM_BACK;
     cam.z = player.z - c * CAM_BACK;
-    cam.y = CAM_UP;
+    // the camera dips lower when looking up and rises a little when looking down
+    cam.y = Math.max(1.0, Math.min(7, CAM_UP + lookPitch * 2.5));
     cam.ct = c; cam.st = s;
-    cam.cp = Math.cos(CAM_PITCH); cam.sp = Math.sin(CAM_PITCH);
+    cam.pitch = pitch;
+    cam.cp = Math.cos(pitch); cam.sp = Math.sin(pitch);
     cam.f = Math.min(W, H);
     cam.cx = W / 2; cam.cy = H / 2;
   }
@@ -1066,11 +1077,14 @@
 
   document.addEventListener("mousemove", function (e) {
     if (!locked || state !== "play") return;
-    var mx = e.movementX || 0;
+    var mx = e.movementX || 0, my = e.movementY || 0;
     if (mx > MOUSE_MAX_STEP) mx = MOUSE_MAX_STEP;
     else if (mx < -MOUSE_MAX_STEP) mx = -MOUSE_MAX_STEP;
-    if (mx !== 0) {
+    if (my > MOUSE_MAX_STEP) my = MOUSE_MAX_STEP;
+    else if (my < -MOUSE_MAX_STEP) my = -MOUSE_MAX_STEP;
+    if (mx !== 0 || my !== 0) {
       camYaw += mx * MOUSE_TURN;
+      lookPitch = clampPitch(lookPitch + my * MOUSE_TURN);
       window.gameTest.inputsHandled++;
     }
   });
@@ -1259,6 +1273,11 @@
     if (keys.q) turn -= 1;
     if (keys.e) turn += 1;
     camYaw += turn * TURN_SPEED * dt;
+
+    var tilt = 0;
+    if (keys.r) tilt -= 1;
+    if (keys.v) tilt += 1;
+    if (tilt !== 0) lookPitch = clampPitch(lookPitch + tilt * TILT_SPEED * dt);
 
     var fwd = 0, str = 0;
     if (keys.w || keys.arrowup) fwd += 1;
@@ -1936,7 +1955,7 @@
 
   function draw() {
     setupCamera();
-    var hy = cam.cy - Math.tan(CAM_PITCH) * cam.f;
+    var hy = cam.cy - Math.tan(cam.pitch) * cam.f;
     var hc = Math.max(1, Math.min(H, hy));
     var sky = ctx.createLinearGradient(0, hc - H * 0.6, 0, hc);
     sky.addColorStop(0, "rgb(104,156,214)");
@@ -1944,12 +1963,14 @@
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, W, H);
     var gy = Math.max(0, Math.min(H, hy));
-    var gr = ctx.createLinearGradient(0, gy, 0, H);
-    gr.addColorStop(0, "rgb(176,192,198)");
-    gr.addColorStop(0.12, "rgb(162,166,164)");
-    gr.addColorStop(1, "rgb(" + GROUND_COL[0] + "," + GROUND_COL[1] + "," + GROUND_COL[2] + ")");
-    ctx.fillStyle = gr;
-    ctx.fillRect(0, gy, W, H - gy);
+    if (gy < H) {
+      var gr = ctx.createLinearGradient(0, gy, 0, Math.max(gy + 1, H));
+      gr.addColorStop(0, "rgb(176,192,198)");
+      gr.addColorStop(0.12, "rgb(162,166,164)");
+      gr.addColorStop(1, "rgb(" + GROUND_COL[0] + "," + GROUND_COL[1] + "," + GROUND_COL[2] + ")");
+      ctx.fillStyle = gr;
+      ctx.fillRect(0, gy, W, H - gy);
+    }
 
     var shaking = shake > 0;
     if (shaking) {
@@ -1983,7 +2004,7 @@
   }
 
   // ---- input ----
-  var MOVE_KEYS = { w: 1, a: 1, s: 1, d: 1, q: 1, e: 1, arrowup: 1, arrowdown: 1, arrowleft: 1, arrowright: 1 };
+  var MOVE_KEYS = { w: 1, a: 1, s: 1, d: 1, q: 1, e: 1, r: 1, v: 1, arrowup: 1, arrowdown: 1, arrowleft: 1, arrowright: 1 };
 
   document.addEventListener("keydown", function (e) {
     var key = String(e.key || "").toLowerCase();
@@ -2087,7 +2108,7 @@
       stickId = e.pointerId;
       stick = { ox: lx, oy: ly, dx: 0, dy: 0 };
     } else if (!locked) {
-      lookers[e.pointerId] = { x: e.clientX, sx: e.clientX, sy: e.clientY, t: performance.now() };
+      lookers[e.pointerId] = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now() };
     }
   });
 
@@ -2101,7 +2122,9 @@
     var l = lookers[e.pointerId];
     if (l) {
       camYaw += (e.clientX - l.x) * DRAG_TURN;
+      lookPitch = clampPitch(lookPitch + (e.clientY - l.y) * DRAG_TURN);
       l.x = e.clientX;
+      l.y = e.clientY;
     }
   });
 
