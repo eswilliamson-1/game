@@ -308,7 +308,7 @@ test("proposals with links, code, or hidden characters are refused", async () =>
 
 test("proposals are limited per person per day", async () => {
   await reset();
-  for (let i = 0; i < 10; i++) await user(ALICE, `select submit_proposal($1)`, [`Idea ${i}`]);
+  for (let i = 0; i < 25; i++) await user(ALICE, `select submit_proposal($1)`, [`Idea ${i}`]);
   await assert.rejects(user(ALICE, `select submit_proposal('One more')`));
   await user(BOB, `select submit_proposal('A different player')`);
 });
