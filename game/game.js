@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var GOAL = "Explore Mossvale and discover all 5 places: the venture capital bank, the pond, the narrow pass through the rocky ridge, the roaring datacenter in the middle, and Copperline Tower, the glass skyscraper in the far northeast corner past the ridge. Equip your pistol (G or the Pistol button) to blast trees out of your way. Press I or the Inventory button to see what you carry and where you have been.";
+  var GOAL = "Explore Mossvale and discover all 5 places: the venture capital bank, the pond, the narrow pass through the rocky ridge, the roaring datacenter in the middle, and Copperline Tower, the glass skyscraper in the far northeast corner past the ridge. Equip your pistol (G or the Pistol button) to blast trees out of your way. Look at the rocket in the southeast and press L to launch it (it reloads in about a minute). Press I or the Inventory button to see what you carry and where you have been.";
   window.gameTest = { inputsHandled: 0, goal: GOAL };
 
   var music = window.TechnoMusic || { start: function () {}, stop: function () {}, tick: function () {}, setMuted: function () {}, isMuted: function () { return true; }, sfx: function () {}, setHum: function () {} };
@@ -264,6 +264,10 @@
     [11.4, 11.75, 0.22, RK_WHITE], [11.75, 12.05, 0.1, RK_RED]
   ];
   var ventT = 0;
+  // launching: mode 0 ready on the pad, 1 in flight, 2 reloading; t counts down to the reload
+  var RK_RELOAD = 60, RK_LOOK_DIST = 42, RK_GONE_Y = 150;
+  var rocket = { mode: 0, y: 0, v: 0, t: 0, fxT: 0 };
+  var rocketLook = false;
   // the northeast corner, cleared and graded for skyscrapers (north of the ridge)
   var NE_LOT = { x0: 17, x1: 30.6, z0: 26.4, z1: 30.6 };
   // hw, hl, wheel height, parts [lz, y0, y1, inset, hz, look]; look: 0 paint, 1 windows + painted roof, 2 truck bed, 3 trim
@@ -1217,6 +1221,78 @@
     if (aim.tree) blowUp(aim.tree);
   }
 
+  // ---- rocket launching ----
+  // the camera looks along camYaw; the rocket counts as looked at when it sits near the middle of the view
+  function lookingAtRocket() {
+    var dx = ROCKET.x - player.x, dz = ROCKET.z - player.z, d = Math.sqrt(dx * dx + dz * dz);
+    if (d > RK_LOOK_DIST) return false;
+    if (d < 0.01) return true;
+    var dot = (dx * Math.sin(camYaw) + dz * Math.cos(camYaw)) / d;
+    if (dot <= 0) return false;
+    var ang = Math.acos(Math.min(1, dot));
+    return ang < Math.max(0.2, Math.atan2(2.4, d));
+  }
+
+  function tryLaunch() {
+    if (state !== "play") return;
+    if (!lookingAtRocket()) {
+      showMessage("Look at the rocket on the launch pad to launch it");
+      return;
+    }
+    if (rocket.mode === 1) {
+      showMessage("The rocket is already on its way up");
+      return;
+    }
+    if (rocket.mode === 2) {
+      showMessage("The rocket is reloading: " + Math.max(1, Math.ceil(rocket.t)) + "s left");
+      return;
+    }
+    rocket.mode = 1;
+    rocket.y = 0;
+    rocket.v = 0;
+    rocket.t = RK_RELOAD;
+    rocket.fxT = 0;
+    showMessage("Liftoff!");
+    music.sfx("boom");
+  }
+
+  function updateRocket(dt) {
+    rocketLook = state === "play" && lookingAtRocket();
+    if (rocket.mode === 0) return;
+    rocket.t -= dt;
+    if (rocket.mode === 1) {
+      var age = RK_RELOAD - rocket.t;
+      // engines build up for a moment, then the rocket climbs faster and faster
+      if (age > 0.9) {
+        rocket.v += (3 + age * 3.5) * dt;
+        rocket.y += rocket.v * dt;
+      }
+      var dx = ROCKET.x - player.x, dz = ROCKET.z - player.z, d = Math.sqrt(dx * dx + dz * dz);
+      if (d < 34 && rocket.y < 60) shake = Math.max(shake, 0.14 * (1 - d / 34));
+      rocket.fxT -= dt;
+      if (rocket.fxT <= 0) {
+        rocket.fxT = 0.06;
+        FX.push({ x: ROCKET.x + (Math.random() - 0.5) * 0.4, y: rocket.y + 0.9, z: ROCKET.z + (Math.random() - 0.5) * 0.4, t: 0, dur: 0.35, r0: 0.5, r1: 1.3, kind: 1 });
+        if (rocket.y < 25) {
+          var a = Math.random() * Math.PI * 2, sp = 1 + Math.random() * 2.5;
+          FX.push({ x: ROCKET.x + Math.cos(a) * sp, y: 0.6, z: ROCKET.z + Math.sin(a) * sp, t: 0, dur: 2.4, r0: 0.9, r1: 2.8, kind: 2 });
+        } else if (Math.random() < 0.5) {
+          FX.push({ x: ROCKET.x, y: rocket.y - 1, z: ROCKET.z, t: 0, dur: 2.0, r0: 0.6, r1: 2.0, kind: 4 });
+        }
+        if (FX.length > 260) FX.splice(0, FX.length - 260);
+      }
+      if (rocket.y > RK_GONE_Y) rocket.mode = 2;
+    }
+    if (rocket.t <= 0) {
+      rocket.mode = 0;
+      rocket.y = 0;
+      rocket.v = 0;
+      rocket.t = 0;
+      showMessage("A new rocket stands on the pad, ready to launch");
+      FX.push({ x: ROCKET.x, y: 1.2, z: ROCKET.z, t: 0, dur: 2.0, r0: 0.8, r1: 2.2, kind: 4 });
+    }
+  }
+
   // ---- movement ----
   function approachAngle(a, target, k) {
     var d = target - a;
@@ -1326,6 +1402,7 @@
     ventT -= dt;
     if (ventT > 0) return;
     ventT = 0.5;
+    if (rocket.mode !== 0) return;
     var dx = ROCKET.x - player.x, dz = ROCKET.z - player.z;
     if (dx * dx + dz * dz > 46 * 46) return;
     var side = Math.random() < 0.5 ? -1 : 1;
@@ -1377,6 +1454,7 @@
     updateEffects(dt);
     updateDatacenter(dt);
     updateLaunchSite(dt);
+    updateRocket(dt);
     if (gunOn) castAim();
   }
 
@@ -1598,21 +1676,29 @@
     for (k = 0; k < 4; k++) {
       var sx = (k & 1) ? 1 : -1, sz = (k & 2) ? 1 : -1;
       addBoxW(list, rx + sx * 0.98, 0.95, rz + sz * 0.98, 0.12, 0.25, 0.12, RK_DARK);
-      addBoxW(list, rx + sx * 0.35, 0.92, rz + sz * 0.35, 0.22, 0.22, 0.22, RK_DARK);
+      if (rocket.mode === 0) addBoxW(list, rx + sx * 0.35, 0.92, rz + sz * 0.35, 0.22, 0.22, 0.22, RK_DARK);
     }
 
-    // the rocket body, stacked from the base up to the nose cone
-    for (i = 0; i < ROCKET_SEGS.length; i++) {
-      s = ROCKET_SEGS[i];
-      addBoxW(list, rx, (s[0] + s[1]) / 2, rz, s[2], (s[1] - s[0]) / 2, s[2], s[3]);
+    // the rocket body, stacked from the base up to the nose cone (it rises when launched)
+    if (rocket.mode !== 2) {
+      var oy = rocket.y;
+      if (rocket.mode === 1) {
+        for (k = 0; k < 4; k++) {
+          addBoxW(list, rx + ((k & 1) ? 0.35 : -0.35), 0.92 + oy, rz + ((k & 2) ? 0.35 : -0.35), 0.22, 0.22, 0.22, RK_DARK);
+        }
+      }
+      for (i = 0; i < ROCKET_SEGS.length; i++) {
+        s = ROCKET_SEGS[i];
+        addBoxW(list, rx, (s[0] + s[1]) / 2 + oy, rz, s[2], (s[1] - s[0]) / 2, s[2], s[3]);
+      }
+      // fins and a round window on the upper stage
+      addBoxW(list, rx - 1.05, 1.72 + oy, rz, 0.3, 0.58, 0.05, RK_RED);
+      addBoxW(list, rx + 1.05, 1.72 + oy, rz, 0.3, 0.58, 0.05, RK_RED);
+      addBoxW(list, rx, 1.72 + oy, rz - 1.05, 0.05, 0.58, 0.3, RK_RED);
+      addBoxW(list, rx, 1.72 + oy, rz + 1.05, 0.05, 0.58, 0.3, RK_RED);
+      addBoxW(list, rx, 8.3 + oy, rz - 0.64, 0.22, 0.22, 0.02, RK_WINDOW, null, 0.9);
+      addBoxW(list, rx + 0.64, 8.3 + oy, rz, 0.02, 0.22, 0.22, RK_WINDOW, null, 0.9);
     }
-    // fins and a round window on the upper stage
-    addBoxW(list, rx - 1.05, 1.72, rz, 0.3, 0.58, 0.05, RK_RED);
-    addBoxW(list, rx + 1.05, 1.72, rz, 0.3, 0.58, 0.05, RK_RED);
-    addBoxW(list, rx, 1.72, rz - 1.05, 0.05, 0.58, 0.3, RK_RED);
-    addBoxW(list, rx, 1.72, rz + 1.05, 0.05, 0.58, 0.3, RK_RED);
-    addBoxW(list, rx, 8.3, rz - 0.64, 0.22, 0.22, 0.02, RK_WINDOW, null, 0.9);
-    addBoxW(list, rx + 0.64, 8.3, rz, 0.02, 0.22, 0.22, RK_WINDOW, null, 0.9);
 
     // service tower: posts, cross beams, swing arms, lightning mast and beacon
     var tx = TOWER.x, tz = TOWER.z, th = TOWER.h, seg = th / 3, lv = th / 6;
@@ -1913,6 +1999,20 @@
     }
   }
 
+  // a small prompt while the rocket is in view: ready to launch, flying, or reloading
+  function drawRocketHint() {
+    if (state !== "play" || !rocketLook) return;
+    var txt = rocket.mode === 0 ? "Press L to launch the rocket" : (rocket.mode === 1 ? "Liftoff!" : "Rocket reloading: " + Math.max(1, Math.ceil(rocket.t)) + "s");
+    ctx.font = "bold 14px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    var w = ctx.measureText(txt).width + 22, x = W / 2, y = H - 48;
+    ctx.fillStyle = "rgba(12,13,16,0.65)";
+    ctx.fillRect(x - w / 2, y - 13, w, 26);
+    ctx.fillStyle = rocket.mode === 0 ? "rgb(255,200,120)" : "rgb(232,232,232)";
+    ctx.fillText(txt, x, y);
+  }
+
   function drawCompass() {
     var r = 20, cx = W - r - 12, cy = r + 12;
     ctx.fillStyle = "rgba(12,16,14,0.5)";
@@ -1990,6 +2090,7 @@
 
     drawAim();
     drawStick();
+    drawRocketHint();
     drawCompass();
   }
 
@@ -2035,6 +2136,15 @@
     if (key === "g") {
       e.preventDefault();
       if (!e.repeat) setGun(!gunOn);
+      return;
+    }
+    if (key === "l") {
+      e.preventDefault();
+      if (!e.repeat) {
+        window.gameTest.inputsHandled++;
+        if (state !== "play") startGame();
+        tryLaunch();
+      }
       return;
     }
     if (key === "f" || key === " ") {
